@@ -1,68 +1,161 @@
 # SkillForge
 
-A local-first developer tool to create, test, and run deterministic "Skills" - reproducible, automated tasks that can be applied to any codebase.
+[![PyPI version](https://badge.fury.io/py/skillforge.svg)](https://badge.fury.io/py/skillforge)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Tests](https://github.com/lhassa8/skillforge/actions/workflows/tests.yml/badge.svg)](https://github.com/lhassa8/skillforge/actions/workflows/tests.yml)
+
+**SkillForge** is a developer tool for creating, testing, and running deterministic "Skills" — reproducible, automated tasks that can be applied to any codebase.
+
+Think of it as **infrastructure-as-code for developer workflows**: codify your setup scripts, deployment procedures, and project configurations as testable, shareable, version-controlled skills.
+
+## Why SkillForge?
+
+| Problem | SkillForge Solution |
+|---------|---------------------|
+| Shell scripts break silently | Skills have built-in validation checks |
+| "Works on my machine" | Sandbox execution isolates changes |
+| Hard to test automation | Fixture-based testing with golden artifacts |
+| Sharing scripts is messy | Registry system for publishing and installing |
+| Secrets in scripts | Encrypted secret management with auto-masking |
+| Non-deterministic CI | Cassette recording for reproducible replays |
+
+## Features
+
+- **Declarative YAML skills** — Define steps, inputs, checks, and requirements
+- **Sandbox execution** — Run skills safely without modifying original files
+- **Fixture testing** — Test skills with known inputs and expected outputs
+- **AI generation** — Generate skills from natural language (Claude, GPT, Ollama)
+- **Secret management** — Encrypted storage with automatic log masking
+- **Skill registry** — Share and discover skills via Git or local registries
+- **Recording mode** — Record terminal sessions and compile into skills
+- **GitHub Actions import** — Convert workflows to local skills
+- **Cassette replay** — Record command outputs for deterministic testing
 
 ## Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/your-org/skillforge.git
-cd skillforge
+pip install skillforge
+```
 
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate
+### Optional Dependencies
 
-# Install in development mode
-pip install -e .
+```bash
+# AI-powered skill generation
+pip install skillforge[ai]        # Includes anthropic, openai
+
+# Enhanced encryption
+pip install skillforge[crypto]    # Includes cryptography (Fernet)
+
+# All optional features
+pip install skillforge[all]
+```
+
+### Requirements
+
+- Python 3.10 or higher
+- git (for recording and registry features)
+- rsync (for sandbox creation)
+
+Verify your setup:
+
+```bash
+skillforge doctor
 ```
 
 ## Quick Start
 
+### 1. Initialize SkillForge
+
 ```bash
-# Initialize SkillForge
 skillforge init
+```
 
-# Verify your environment
-skillforge doctor
+### 2. Create Your First Skill
 
-# Create a new skill
-skillforge new my_first_skill
+```bash
+skillforge new setup_project
+```
 
-# Edit the skill definition
-$EDITOR skills/my_first_skill/skill.yaml
+### 3. Define the Skill
 
-# Lint the skill
-skillforge lint skills/my_first_skill
+Edit `skills/setup_project/skill.yaml`:
 
-# Run the skill against a target directory
-skillforge run skills/my_first_skill --target ./my-project
+```yaml
+name: setup_project
+version: "0.1.0"
+description: "Initialize a Python project with common tooling"
 
-# Test the skill with fixtures
-skillforge test skills/my_first_skill
+inputs:
+  - name: project_name
+    type: string
+    required: true
+    description: "Name of the project"
+
+steps:
+  - id: create_venv
+    type: shell
+    name: "Create virtual environment"
+    command: "python -m venv .venv"
+    cwd: "{sandbox_dir}"
+
+  - id: install_tools
+    type: shell
+    name: "Install development tools"
+    command: ".venv/bin/pip install pytest black ruff"
+    cwd: "{sandbox_dir}"
+
+  - id: create_pyproject
+    type: file.template
+    name: "Create pyproject.toml"
+    path: "{sandbox_dir}/pyproject.toml"
+    template: |
+      [project]
+      name = "{project_name}"
+      version = "0.1.0"
+
+      [tool.black]
+      line-length = 88
+
+      [tool.ruff]
+      line-length = 88
+
+checks:
+  - id: venv_exists
+    type: dir_exists
+    path: "{sandbox_dir}/.venv"
+
+  - id: pyproject_exists
+    type: file_exists
+    path: "{sandbox_dir}/pyproject.toml"
+```
+
+### 4. Test the Skill
+
+```bash
+# Validate the skill definition
+skillforge lint skills/setup_project
+
+# Dry run (shows what would happen)
+skillforge run skills/setup_project --target ./my-project --dry-run
+
+# Run for real (in sandbox)
+skillforge run skills/setup_project --target ./my-project --input project_name=myapp
 ```
 
 ## Core Concepts
 
 ### Skills
 
-A **Skill** is a reproducible, automated task defined in YAML. Each skill contains:
-
-- **Steps**: Shell commands or file operations to execute
-- **Inputs**: Parameters the skill accepts
-- **Checks**: Validations to verify the skill succeeded
-- **Fixtures**: Test cases with known inputs and expected outputs
-
-### Skill Directory Structure
+A **Skill** is a reproducible task defined in YAML:
 
 ```
 my_skill/
-├── skill.yaml          # Skill definition
+├── skill.yaml          # Skill definition (steps, inputs, checks)
 ├── SKILL.txt           # Human-readable description
-├── checks.py           # Custom check functions
-├── fixtures/           # Test fixtures
-│   └── happy_path/
-│       ├── fixture.yaml
+├── checks.py           # Custom validation functions (optional)
+├── fixtures/           # Test cases
+│   └── basic/
 │       ├── input/      # Initial state
 │       └── expected/   # Expected final state
 ├── cassettes/          # Recorded command outputs
@@ -71,139 +164,145 @@ my_skill/
 
 ### Sandbox Execution
 
-Skills run in an isolated sandbox by default. The target directory is copied to a temporary location, and all modifications happen there. This protects your original files from unintended changes.
-
-## Commands
-
-### Environment Setup
-
-#### `skillforge init`
-
-Initialize SkillForge configuration in your home directory.
+Skills run in an isolated sandbox by default. Your original files are copied to a temporary location, and all modifications happen there. This protects against unintended changes and enables safe testing.
 
 ```bash
-skillforge init
+# Run in sandbox (default, safe)
+skillforge run my_skill --target ./project
+
+# Run directly on target (dangerous, use with caution)
+skillforge run my_skill --target ./project --no-sandbox
 ```
 
-Creates `~/.skillforge/` with default settings.
+### Placeholders
 
-#### `skillforge doctor`
+Use placeholders in your skill definitions:
 
-Verify your environment has all required dependencies.
+| Placeholder | Description |
+|-------------|-------------|
+| `{sandbox_dir}` | Working directory (sandbox or target) |
+| `{target_dir}` | Original target directory path |
+| `{skill_dir}` | Skill definition directory |
+| `{input_name}` | Value of an input parameter |
+| `{secret:name}` | Value from secret storage |
 
-```bash
-skillforge doctor
-```
-
-Checks for Python version, git, rsync, and other requirements.
+## Command Reference
 
 ### Creating Skills
 
-#### `skillforge new`
-
-Create a new skill scaffold with boilerplate files.
-
 ```bash
-# Basic usage
+# Create from scratch
 skillforge new my_skill
 
-# With description
-skillforge new deploy_app --description "Deploy application to production"
+# Generate with AI
+skillforge ai generate "Set up a Node.js project with TypeScript and Jest"
 
-# Custom output directory
-skillforge new my_skill --out ./custom/path
-```
-
-#### `skillforge generate`
-
-Generate a skill from a human-readable spec file.
-
-```bash
-skillforge generate --from spec.txt --out ./skills
-```
-
-**Spec file format:**
-
-```
-SKILL: setup_project
-DESCRIPTION: Initialize a new Node.js project
-VERSION: 0.1.0
-
-INPUTS:
-- target_dir: path (required) - Target directory
-- project_name: string (default: "my-app") - Project name
-
-STEPS:
-1. Initialize npm
-   shell: npm init -y
-   cwd: {target_dir}
-
-2. Install dependencies
-   shell: npm install express
-   cwd: {target_dir}
-
-CHECKS:
-- file_exists: {sandbox_dir}/package.json
-- exit_code: step1 equals 0
-```
-
-#### `skillforge wrap`
-
-Wrap an existing script as a skill.
-
-```bash
-# Wrap a bash script
-skillforge wrap ./deploy.sh
-
-# Wrap with custom name
-skillforge wrap ./build.py --name my_build_skill
-
-# Override detected script type
-skillforge wrap ./script --type python
-
-# Custom output directory
-skillforge wrap ./script.sh --out ./my-skills
-```
-
-Supports: bash, shell, python, node, ruby, perl
-
-#### `skillforge import github-action`
-
-Import a GitHub Actions workflow as a skill.
-
-```bash
-# Import a workflow
+# Import GitHub Actions workflow
 skillforge import github-action .github/workflows/ci.yml
 
-# Import specific job
-skillforge import github-action .github/workflows/ci.yml --job build
+# Wrap existing script
+skillforge wrap ./scripts/deploy.sh
 
-# Custom output
-skillforge import github-action workflow.yml --out ./skills
+# Record terminal session
+skillforge record --name deploy --workdir ./project
+# ... do your work ...
+exit
+skillforge compile rec_20240115_143022 --name deploy
 ```
 
-Shell steps (`run:`) are converted directly. Action steps (`uses:`) are added as placeholders requiring manual conversion.
-
-### AI-Powered Skill Generation
-
-Use natural language to generate skills with AI. Supports multiple providers: Anthropic Claude, OpenAI GPT, and local Ollama models.
-
-#### Setup
-
-Configure your preferred AI provider:
+### Running Skills
 
 ```bash
-# Option 1: Anthropic Claude (recommended)
-export ANTHROPIC_API_KEY=your-api-key
-pip install anthropic
+# Basic execution
+skillforge run ./skills/my_skill --target ./project
 
-# Option 2: OpenAI GPT
-export OPENAI_API_KEY=your-api-key
-pip install openai
+# With inputs
+skillforge run ./skills/my_skill --target ./project --input name=value
 
-# Option 3: Ollama (local, no API key needed)
-ollama serve  # Start Ollama server
+# With environment variables
+skillforge run ./skills/my_skill --target ./project -e API_URL=https://api.example.com
+
+# Dry run (preview only)
+skillforge run ./skills/my_skill --target ./project --dry-run
 ```
+
+### Testing Skills
+
+```bash
+# Validate skill definition
+skillforge lint ./skills/my_skill
+
+# Run fixture tests
+skillforge test ./skills/my_skill
+
+# Create golden artifacts for regression testing
+skillforge bless ./skills/my_skill --fixture basic
+
+# Record command outputs for deterministic replay
+skillforge cassette record ./skills/my_skill --fixture basic
+skillforge cassette replay ./skills/my_skill --fixture basic
+```
+
+### Skill Registry
+
+```bash
+# Add a registry
+skillforge registry add company https://github.com/company/skills-registry
+
+# Search for skills
+skillforge search docker
+
+# Install a skill
+skillforge install setup-python
+
+# List installed skills
+skillforge installed
+
+# Update skills
+skillforge update --check
+skillforge update
+```
+
+### Secret Management
+
+```bash
+# Store a secret (prompts for value)
+skillforge secret set API_KEY
+
+# Store with value
+skillforge secret set DB_URL --value "postgresql://..."
+
+# List secrets
+skillforge secret list
+
+# Use in skills with {secret:name} syntax
+```
+
+## AI-Powered Generation
+
+Generate skills from natural language descriptions:
+
+```bash
+# Basic generation
+skillforge ai generate "Create a Docker development environment"
+
+# With project context
+skillforge ai generate "Add CI/CD pipeline" --target ./my-project
+
+# Refine existing skill
+skillforge ai refine ./skills/deploy "Add rollback on failure"
+
+# Explain what a skill does
+skillforge ai explain ./skills/complex_deploy
+```
+
+### Supported Providers
+
+| Provider | Setup | Models |
+|----------|-------|--------|
+| Anthropic | `export ANTHROPIC_API_KEY=...` | claude-sonnet-4-20250514 (default) |
+| OpenAI | `export OPENAI_API_KEY=...` | gpt-4o (default) |
+| Ollama | `ollama serve` | llama3.2, codellama, etc. |
 
 Check provider status:
 
@@ -211,437 +310,46 @@ Check provider status:
 skillforge ai providers
 ```
 
-#### `skillforge ai generate`
+## Secret Management
 
-Generate a skill from natural language description.
+SkillForge provides encrypted secret storage with automatic log masking.
 
-```bash
-# Basic generation
-skillforge ai generate "Set up a Python project with pytest and black"
+### Backends
 
-# With project context (analyzes target directory)
-skillforge ai generate "Add Docker support" --target ./myproject
+| Backend | Priority | Description |
+|---------|----------|-------------|
+| `env` | 1 | Environment variables (`SKILLFORGE_SECRET_*`) |
+| `file` | 2 | Encrypted local storage (`~/.skillforge/secrets/`) |
+| `vault` | 3 | HashiCorp Vault integration |
 
-# Using specific provider
-skillforge ai generate "Create CI workflow" --provider openai
-
-# With custom model
-skillforge ai generate "Deploy to AWS" --provider anthropic --model claude-3-haiku-20240307
-
-# With additional requirements
-skillforge ai generate "Set up monitoring" --requirements "Use Prometheus, include Grafana dashboards"
-```
-
-The AI will:
-1. Analyze your project structure (if `--target` provided)
-2. Generate a complete skill.yaml with steps and checks
-3. Create the skill directory with all boilerplate files
-4. Validate the output and suggest next steps
-
-#### `skillforge ai refine`
-
-Refine an existing skill based on feedback.
-
-```bash
-# Fix issues
-skillforge ai refine ./skills/my_skill "Add error handling for missing files"
-
-# Improve structure
-skillforge ai refine ./skills/my_skill "Split into smaller steps"
-
-# Add features
-skillforge ai refine ./skills/my_skill "Add support for TypeScript projects"
-```
-
-#### `skillforge ai explain`
-
-Generate a plain-English explanation of what a skill does.
-
-```bash
-skillforge ai explain ./skills/deploy_app
-```
-
-Useful for understanding complex skills or generating documentation.
-
-### Skill Registry
-
-Share and discover skills through registries. SkillForge supports local registries for development and Git-based registries for team sharing.
-
-#### Managing Registries
-
-```bash
-# List configured registries
-skillforge registry list
-
-# Add a Git-based registry
-skillforge registry add mycompany https://github.com/mycompany/skills-registry
-
-# Add a local registry for testing
-skillforge registry add local-dev /path/to/registry --type local
-
-# Remove a registry
-skillforge registry remove mycompany
-
-# Sync/refresh registry indexes
-skillforge registry sync
-```
-
-#### Searching and Installing Skills
-
-```bash
-# Search for skills
-skillforge search docker
-skillforge search "python setup"
-
-# Install a skill (latest version)
-skillforge install setup-python
-
-# Install specific version
-skillforge install setup-python --version 1.2.0
-
-# Install with version constraint
-skillforge install setup-python --version ">=1.0.0,<2.0.0"
-
-# List installed skills
-skillforge installed
-
-# Uninstall a skill
-skillforge uninstall setup-python
-```
-
-#### Publishing Skills
-
-```bash
-# Package a skill (creates .tar.gz)
-skillforge pack ./skills/my_skill
-
-# Publish to local registry
-skillforge publish ./skills/my_skill
-
-# Publish with author info
-skillforge publish ./skills/my_skill --author "John Doe <john@example.com>"
-```
-
-#### Updating Skills
-
-```bash
-# Check for available updates
-skillforge update --check
-
-# Update all installed skills
-skillforge update
-
-# Update specific skill
-skillforge update my_skill
-```
-
-#### Version Constraints
-
-SkillForge supports semantic versioning with flexible constraints:
-
-| Constraint | Meaning |
-|------------|---------|
-| `1.2.3` | Exact version |
-| `*` | Any version |
-| `1.2.*` | Any 1.2.x version |
-| `^1.2.3` | >=1.2.3, <2.0.0 |
-| `~1.2.3` | >=1.2.3, <1.3.0 |
-| `>=1.0.0` | 1.0.0 or higher |
-| `>=1.0.0,<2.0.0` | Range |
-
-#### Creating a Registry
-
-A registry is a directory or Git repository with this structure:
-
-```
-registry/
-├── index.json          # Skills index
-└── packages/           # Skill tarballs
-    ├── skill-1.0.0.tar.gz
-    └── other-skill-2.1.0.tar.gz
-```
-
-The `index.json` format:
-
-```json
-{
-  "skills": {
-    "skill-name": {
-      "name": "skill-name",
-      "description": "What it does",
-      "author": "Author Name",
-      "tags": ["tag1", "tag2"],
-      "versions": [
-        {
-          "version": "1.0.0",
-          "published_at": "2024-01-01T00:00:00",
-          "checksum": "sha256...",
-          "size_bytes": 1024
-        }
-      ]
-    }
-  }
-}
-```
-
-### Recording Skills
-
-Record your terminal session to create skills from real work.
-
-#### `skillforge record`
-
-Start a recording session.
-
-```bash
-# Start recording
-skillforge record --name deploy_process --workdir ./my-project
-
-# Use zsh instead of bash
-skillforge record -n setup -w . --shell zsh
-```
-
-This launches an interactive shell where all commands are captured. Type `exit` when done.
-
-#### `skillforge stop`
-
-Stop the active recording session (from another terminal).
-
-```bash
-skillforge stop
-```
-
-#### `skillforge compile`
-
-Compile a recording into a skill.
-
-```bash
-# Compile with default name
-skillforge compile rec_20240115_143022
-
-# Custom skill name and output
-skillforge compile rec_20240115_143022 --name deploy --out ./skills
-```
-
-#### `skillforge recording list`
-
-List all recording sessions.
-
-```bash
-skillforge recording list
-```
-
-#### `skillforge recording show`
-
-Show details of a recording.
-
-```bash
-skillforge recording show rec_20240115_143022
-```
-
-#### `skillforge recording delete`
-
-Delete a recording session.
-
-```bash
-skillforge recording delete rec_20240115_143022
-```
-
-### Running Skills
-
-#### `skillforge run`
-
-Execute a skill against a target directory.
-
-```bash
-# Basic run (uses sandbox)
-skillforge run ./skills/my_skill --target ./my-project
-
-# Dry run - show plan without executing
-skillforge run ./skills/my_skill --target ./my-project --dry-run
-
-# Run without sandbox (dangerous - modifies target directly)
-skillforge run ./skills/my_skill --target ./my-project --no-sandbox
-
-# Pass environment variables
-skillforge run ./skills/my_skill --target ./my-project -e API_KEY=secret -e DEBUG=1
-
-# Custom sandbox directory
-skillforge run ./skills/my_skill --target ./my-project --sandbox /tmp/my-sandbox
-```
-
-#### `skillforge lint`
-
-Validate skill structure and check for issues.
-
-```bash
-skillforge lint ./skills/my_skill
-```
-
-Reports errors and warnings about:
-- Missing required fields
-- Invalid step configurations
-- Undefined input references
-- Missing fixtures
-
-### Testing Skills
-
-#### `skillforge test`
-
-Run fixture tests for a skill.
-
-```bash
-# Run all fixtures
-skillforge test ./skills/my_skill
-
-# Run specific fixture
-skillforge test ./skills/my_skill --fixture happy_path
-
-# Verbose output
-skillforge test ./skills/my_skill --verbose
-```
-
-#### `skillforge bless`
-
-Run a skill and store the output as golden artifacts for regression testing.
-
-```bash
-# Bless a fixture
-skillforge bless ./skills/my_skill --fixture happy_path
-
-# Overwrite existing golden artifacts
-skillforge bless ./skills/my_skill --fixture happy_path --force
-```
-
-Creates `_golden/` directory with:
-- `expected_changed_files.json` - List of files modified
-- `expected_hashes.json` - SHA256 hashes of file contents
-- `bless_metadata.json` - Timestamp and context
-
-### Cassettes (Deterministic Replay)
-
-Cassettes record command outputs for deterministic test replay.
-
-#### `skillforge cassette record`
-
-Record command outputs during skill execution.
-
-```bash
-skillforge cassette record ./skills/my_skill --fixture happy_path
-```
-
-#### `skillforge cassette replay`
-
-Replay recorded outputs instead of executing commands.
-
-```bash
-skillforge cassette replay ./skills/my_skill --fixture happy_path
-```
-
-#### `skillforge cassette list`
-
-List all cassettes for a skill.
-
-```bash
-skillforge cassette list ./skills/my_skill
-```
-
-#### `skillforge cassette show`
-
-Show details of a cassette.
-
-```bash
-skillforge cassette show ./skills/my_skill --fixture happy_path
-```
-
-## Skill Definition Reference
-
-### skill.yaml
+### Usage in Skills
 
 ```yaml
-name: my_skill
-version: "0.1.0"
-description: "What this skill does"
-
-# Input parameters
-inputs:
-  - name: target_dir
-    type: path
-    description: "Target directory"
-    required: true
-  - name: message
-    type: string
-    description: "Optional message"
-    required: false
-    default: "Hello"
-
-# Preconditions (documentation)
-preconditions:
-  - "Git must be installed"
-  - "Node.js >= 18 required"
-
-# Requirements
-requirements:
-  commands:
-    - git
-    - node
-
-# Execution steps
 steps:
-  - id: step1
+  - id: deploy
     type: shell
-    name: "Initialize project"
-    command: "npm init -y"
-    cwd: "{sandbox_dir}"
+    command: "deploy --token {secret:deploy_token}"
     env:
-      NODE_ENV: production
-
-  - id: step2
-    type: file.template
-    name: "Create config"
-    path: "{sandbox_dir}/config.json"
-    template: |
-      {
-        "message": "{message}"
-      }
-
-# Validation checks
-checks:
-  - id: check1
-    type: exit_code
-    step_id: step1
-    equals: 0
-
-  - id: check2
-    type: file_exists
-    path: "{sandbox_dir}/package.json"
-
-  - id: check3
-    type: file_contains
-    path: "{sandbox_dir}/config.json"
-    contains: "Hello"
+      DATABASE_URL: "{secret:database_url}"
 ```
 
-### Placeholders
+Secrets are:
+- Encrypted at rest (Fernet or XOR-based)
+- Automatically masked in logs and reports
+- Never stored in plain text
 
-Use placeholders in commands and paths:
-
-| Placeholder | Description |
-|-------------|-------------|
-| `{target_dir}` | Original target directory |
-| `{sandbox_dir}` | Sandbox working directory |
-| `{skill_dir}` | Skill definition directory |
-| `{input_name}` | Value of input parameter |
+## Skill Definition Reference
 
 ### Step Types
 
 | Type | Description |
 |------|-------------|
 | `shell` | Execute a shell command |
-| `file.template` | Create a file from template content |
-| `file.replace` | Replace content in an existing file |
-| `json.patch` | Patch a JSON file |
-| `yaml.patch` | Patch a YAML file |
-| `python` | Execute Python code |
+| `python` | Run Python code or module |
+| `file.template` | Create file from template |
+| `file.replace` | Replace content in file |
+| `json.patch` | Patch JSON file |
+| `yaml.patch` | Patch YAML file |
 
 ### Check Types
 
@@ -652,84 +360,78 @@ Use placeholders in commands and paths:
 | `file_contains` | Verify file contains string |
 | `file_not_contains` | Verify file doesn't contain string |
 | `dir_exists` | Verify directory exists |
-| `custom` | Run custom Python check function |
+| `custom` | Run custom Python function |
 
-## Fixtures
-
-Fixtures are test cases for skills. Each fixture has:
-
-- `input/` - Initial directory state (copied to sandbox)
-- `expected/` - Expected final state (compared after run)
-- `fixture.yaml` - Configuration overrides
-
-### fixture.yaml
+### Full skill.yaml Example
 
 ```yaml
-# Override input values
+name: setup_node_project
+version: "1.0.0"
+description: "Initialize a Node.js project with TypeScript"
+
 inputs:
-  message: "Custom message"
+  - name: project_name
+    type: string
+    required: true
+  - name: node_version
+    type: string
+    default: "20"
 
-# Allow files not in expected/
-allow_extra_files: true
-```
+requirements:
+  commands:
+    - node
+    - npm
 
-## Examples
+preconditions:
+  - "Node.js must be installed"
 
-### Example 1: Create a deployment skill
+steps:
+  - id: init
+    type: shell
+    name: "Initialize npm project"
+    command: "npm init -y"
+    cwd: "{sandbox_dir}"
 
-```bash
-# Record your deployment process
-skillforge record --name deploy --workdir ./my-app
+  - id: install_typescript
+    type: shell
+    name: "Install TypeScript"
+    command: "npm install -D typescript @types/node"
+    cwd: "{sandbox_dir}"
 
-# In the recording shell:
-[REC deploy] $ npm install
-[REC deploy] $ npm run build
-[REC deploy] $ rsync -av dist/ server:/var/www/
-[REC deploy] $ exit
+  - id: create_tsconfig
+    type: file.template
+    path: "{sandbox_dir}/tsconfig.json"
+    template: |
+      {
+        "compilerOptions": {
+          "target": "ES2022",
+          "module": "commonjs",
+          "strict": true,
+          "outDir": "./dist"
+        }
+      }
 
-# Compile to a skill
-skillforge compile rec_20240115_143022 --name deploy
+  - id: update_package
+    type: json.patch
+    path: "{sandbox_dir}/package.json"
+    operations:
+      - op: add
+        path: /scripts/build
+        value: "tsc"
 
-# Test it
-skillforge run ./skills/deploy --target ./my-app --dry-run
-```
+checks:
+  - id: typescript_installed
+    type: file_exists
+    path: "{sandbox_dir}/node_modules/typescript"
 
-### Example 2: Import CI workflow
-
-```bash
-# Import your GitHub Actions workflow
-skillforge import github-action .github/workflows/test.yml --out ./skills
-
-# Review and edit
-$EDITOR ./skills/test/skill.yaml
-
-# Run locally
-skillforge run ./skills/test --target .
-```
-
-### Example 3: Wrap existing script
-
-```bash
-# Wrap your build script
-skillforge wrap ./scripts/build.sh --name build
-
-# Add test fixtures
-mkdir -p ./skills/build/fixtures/simple/input
-mkdir -p ./skills/build/fixtures/simple/expected
-
-# Create fixture input
-echo '{"name": "test"}' > ./skills/build/fixtures/simple/input/package.json
-
-# Run and bless
-skillforge bless ./skills/build --fixture simple
-
-# Now tests will pass
-skillforge test ./skills/build
+  - id: tsconfig_exists
+    type: file_exists
+    path: "{sandbox_dir}/tsconfig.json"
 ```
 
 ## Configuration
 
-Configuration is stored in `~/.skillforge/config.yaml`:
+Configuration file: `~/.skillforge/config.yaml`
 
 ```yaml
 # Default output directory for new skills
@@ -742,24 +444,46 @@ default_shell: bash
 sandbox:
   cleanup: true
   base_dir: /tmp/skillforge
+
+# Registry settings
+registries:
+  - name: default
+    url: https://github.com/skillforge/registry
+    type: git
+    priority: 50
 ```
 
 ## Development
 
 ```bash
-# Install dev dependencies
+# Clone the repository
+git clone https://github.com/lhassa8/skillforge.git
+cd skillforge
+
+# Install in development mode
 pip install -e ".[dev]"
 
 # Run tests
 pytest tests/ -v
 
-# Run specific test file
-pytest tests/test_runner.py -v
-
 # Run with coverage
 pytest tests/ --cov=skillforge
+
+# Type checking
+mypy skillforge/
+
+# Linting
+ruff check skillforge/
 ```
+
+## Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
-MIT License - see LICENSE file for details.
+MIT License - see [LICENSE](LICENSE) for details.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for version history.

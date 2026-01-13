@@ -18,6 +18,12 @@ from skillforge.sandbox import (
     load_ignore_patterns,
     SandboxError,
 )
+from skillforge.secrets import (
+    SecretManager,
+    SecretMasker,
+    SecretNotFoundError,
+    get_secret_manager,
+)
 
 
 @dataclass
@@ -59,6 +65,8 @@ def run_skill(
     env_vars: Optional[dict[str, str]] = None,
     input_overrides: Optional[dict[str, Any]] = None,
     cassette: Optional[Any] = None,  # Cassette object for replay mode
+    secret_manager: Optional[SecretManager] = None,
+    mask_secrets: bool = True,
 ) -> RunReport:
     """Run a skill against a target directory.
 
@@ -71,6 +79,8 @@ def run_skill(
         env_vars: Additional environment variables
         input_overrides: Override input values
         cassette: Optional Cassette object for replay mode
+        secret_manager: Optional SecretManager for resolving {secret:name} placeholders
+        mask_secrets: If True, mask secret values in logs and reports
 
     Returns:
         RunReport with execution details
@@ -88,6 +98,15 @@ def run_skill(
         mode = "cassette_replay"
     else:
         mode = "run"
+
+    # Initialize secret manager and masker
+    if secret_manager is None:
+        secret_manager = get_secret_manager()
+
+    masker: Optional[SecretMasker] = None
+    if mask_secrets:
+        masker = SecretMasker()
+        masker.add_from_manager(secret_manager)
 
     # Initialize report
     report = RunReport(
@@ -156,8 +175,8 @@ def run_skill(
                 from skillforge.cassette import replay_step_from_cassette
                 from skillforge.placeholders import substitute_dict
 
-                # Resolve placeholders to match against cassette
-                resolved_step = substitute_dict(step, context)
+                # Resolve placeholders to match against cassette (include secrets)
+                resolved_step = substitute_dict(step, context, secret_manager)
                 result = replay_step_from_cassette(
                     cassette,
                     step_id,
@@ -167,7 +186,14 @@ def run_skill(
 
             # Fall back to actual execution if not replaying or not found
             if result is None:
-                result = execute_step(step, context, logs_dir, dry_run)
+                result = execute_step(
+                    step,
+                    context,
+                    logs_dir,
+                    dry_run,
+                    secret_manager=secret_manager,
+                    secret_masker=masker,
+                )
 
             step_results[step_id] = result
 
@@ -233,6 +259,10 @@ def run_skill(
 
     except PlaceholderError as e:
         report.error_message = f"Placeholder error: {e}"
+        report.success = False
+
+    except SecretNotFoundError as e:
+        report.error_message = f"Secret not found: {e}"
         report.success = False
 
     except Exception as e:

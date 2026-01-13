@@ -42,6 +42,8 @@ def execute_step(
     context: dict[str, Any],
     logs_dir: Path,
     dry_run: bool = False,
+    secret_manager: Optional[Any] = None,
+    secret_masker: Optional[Any] = None,
 ) -> StepResult:
     """Execute a single step.
 
@@ -50,6 +52,8 @@ def execute_step(
         context: Placeholder context for substitution
         logs_dir: Directory to write log files
         dry_run: If True, don't actually execute
+        secret_manager: Optional SecretManager for {secret:name} resolution
+        secret_masker: Optional SecretMasker for log redaction
 
     Returns:
         StepResult with execution details
@@ -57,17 +61,17 @@ def execute_step(
     step_id = step.get("id", "unknown")
     step_type = step.get("type", "unknown")
 
-    # Resolve placeholders in step
-    resolved_step = substitute_dict(step, context)
+    # Resolve placeholders in step (including secrets)
+    resolved_step = substitute_dict(step, context, secret_manager)
 
     if step_type == "shell":
-        return _execute_shell_step(resolved_step, logs_dir, dry_run)
+        return _execute_shell_step(resolved_step, logs_dir, dry_run, secret_masker)
     elif step_type == "python":
-        return _execute_python_step(resolved_step, logs_dir, dry_run)
+        return _execute_python_step(resolved_step, logs_dir, dry_run, secret_masker)
     elif step_type == "file.replace":
         return _execute_file_replace_step(resolved_step, logs_dir, dry_run)
     elif step_type == "file.template":
-        return _execute_file_template_step(resolved_step, context, logs_dir, dry_run)
+        return _execute_file_template_step(resolved_step, context, logs_dir, dry_run, secret_manager)
     elif step_type == "json.patch":
         return _execute_json_patch_step(resolved_step, logs_dir, dry_run)
     elif step_type == "yaml.patch":
@@ -85,6 +89,7 @@ def _execute_shell_step(
     step: dict[str, Any],
     logs_dir: Path,
     dry_run: bool,
+    secret_masker: Optional[Any] = None,
 ) -> StepResult:
     """Execute a shell step."""
     step_id = step.get("id", "unknown")
@@ -95,10 +100,15 @@ def _execute_shell_step(
     expect_exit = step.get("expect_exit", 0)
     allow_failure = step.get("allow_failure", False)
 
+    # Mask command for logging (secrets may be in command)
+    masked_command = command
+    if secret_masker:
+        masked_command = secret_masker.mask(command)
+
     result = StepResult(
         step_id=step_id,
         step_type="shell",
-        resolved_command=command,
+        resolved_command=masked_command,  # Store masked command in report
         resolved_cwd=cwd,
     )
 
@@ -114,7 +124,7 @@ def _execute_shell_step(
 
     try:
         proc = subprocess.run(
-            command,
+            command,  # Execute actual command with secrets
             shell=True,
             cwd=cwd,
             env=env,
@@ -124,8 +134,16 @@ def _execute_shell_step(
         )
 
         result.exit_code = proc.returncode
-        result.stdout = _truncate_output(proc.stdout)
-        result.stderr = _truncate_output(proc.stderr)
+        stdout = _truncate_output(proc.stdout)
+        stderr = _truncate_output(proc.stderr)
+
+        # Mask secrets in output
+        if secret_masker:
+            stdout = secret_masker.mask(stdout)
+            stderr = secret_masker.mask(stderr)
+
+        result.stdout = stdout
+        result.stderr = stderr
         result.duration_ms = int((time.time() - start_time) * 1000)
 
         # Check exit code
@@ -145,7 +163,10 @@ def _execute_shell_step(
 
     except Exception as e:
         result.status = "failed"
-        result.error_message = str(e)
+        error_msg = str(e)
+        if secret_masker:
+            error_msg = secret_masker.mask(error_msg)
+        result.error_message = error_msg
         result.duration_ms = int((time.time() - start_time) * 1000)
 
     # Write logs
@@ -158,6 +179,7 @@ def _execute_python_step(
     step: dict[str, Any],
     logs_dir: Path,
     dry_run: bool,
+    secret_masker: Optional[Any] = None,
 ) -> StepResult:
     """Execute a python step."""
     step_id = step.get("id", "unknown")
@@ -207,8 +229,16 @@ def _execute_python_step(
         )
 
         result.exit_code = proc.returncode
-        result.stdout = _truncate_output(proc.stdout)
-        result.stderr = _truncate_output(proc.stderr)
+        stdout = _truncate_output(proc.stdout)
+        stderr = _truncate_output(proc.stderr)
+
+        # Mask secrets in output
+        if secret_masker:
+            stdout = secret_masker.mask(stdout)
+            stderr = secret_masker.mask(stderr)
+
+        result.stdout = stdout
+        result.stderr = stderr
         result.duration_ms = int((time.time() - start_time) * 1000)
 
         if proc.returncode == 0:
@@ -223,7 +253,10 @@ def _execute_python_step(
 
     except Exception as e:
         result.status = "failed"
-        result.error_message = str(e)
+        error_msg = str(e)
+        if secret_masker:
+            error_msg = secret_masker.mask(error_msg)
+        result.error_message = error_msg
 
     result.duration_ms = int((time.time() - start_time) * 1000)
     _write_step_logs(step_id, result, logs_dir)
@@ -288,6 +321,7 @@ def _execute_file_template_step(
     context: dict[str, Any],
     logs_dir: Path,
     dry_run: bool,
+    secret_manager: Optional[Any] = None,
 ) -> StepResult:
     """Execute a file.template step."""
     step_id = step.get("id", "unknown")
@@ -327,8 +361,8 @@ def _execute_file_template_step(
                 return result
             template = template_path.read_text()
 
-        # Substitute placeholders in template
-        content = substitute(template, context)
+        # Substitute placeholders in template (including secrets)
+        content = substitute(template, context, secret_manager)
 
         # Write file
         path.parent.mkdir(parents=True, exist_ok=True)

@@ -27,6 +27,9 @@ app.add_typer(ai_app, name="ai")
 registry_app = typer.Typer(help="Manage skill registries.")
 app.add_typer(registry_app, name="registry")
 
+secret_app = typer.Typer(help="Manage secrets for skill execution.")
+app.add_typer(secret_app, name="secret")
+
 
 @app.command()
 def init() -> None:
@@ -2407,6 +2410,319 @@ def update(
                 console.print(f"[dim]Updating {skill_name}...[/dim]")
                 manager.install(skill_name, latest_version, force=True)
                 console.print(f"[green]Updated {skill_name} to {latest_version}[/green]")
+
+
+# =============================================================================
+# Secret Commands
+# =============================================================================
+
+
+@secret_app.command("set")
+def secret_set(
+    name: str = typer.Argument(..., help="Secret name"),
+    value: Optional[str] = typer.Option(
+        None,
+        "--value",
+        "-v",
+        help="Secret value (will prompt if not provided)",
+    ),
+    description: str = typer.Option(
+        "",
+        "--description",
+        "-d",
+        help="Description of the secret",
+    ),
+    backend: str = typer.Option(
+        "file",
+        "--backend",
+        "-b",
+        help="Storage backend: file, vault",
+    ),
+) -> None:
+    """Store a secret for use in skills.
+
+    Secrets can be referenced in skill files using {secret:name} syntax.
+    Values are encrypted before storage.
+
+    Examples:
+
+    \b
+    # Set a secret interactively (prompts for value)
+    skillforge secret set API_KEY
+
+    \b
+    # Set with value
+    skillforge secret set DATABASE_URL --value "postgresql://..."
+
+    \b
+    # Set with description
+    skillforge secret set API_KEY --description "Production API key"
+    """
+    from skillforge.secrets import (
+        get_secret_manager,
+        SecretBackendError,
+        init_secrets_dir,
+    )
+
+    # Initialize secrets directory
+    init_secrets_dir()
+
+    # Prompt for value if not provided
+    if value is None:
+        value = typer.prompt(f"Enter value for {name}", hide_input=True)
+        if not value:
+            console.print("[red]Secret value cannot be empty[/red]")
+            raise typer.Exit(code=1)
+
+    try:
+        manager = get_secret_manager()
+        manager.set(name, value, description, backend_name=backend)
+
+        console.print(f"[green]Secret stored:[/green] {name}")
+        if description:
+            console.print(f"  Description: {description}")
+        console.print(f"  Backend: {backend}")
+        console.print()
+        console.print(f"Use in skills with: [cyan]{{secret:{name}}}[/cyan]")
+
+    except SecretBackendError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(code=1)
+
+
+@secret_app.command("get")
+def secret_get(
+    name: str = typer.Argument(..., help="Secret name to retrieve"),
+    show: bool = typer.Option(
+        False,
+        "--show",
+        "-s",
+        help="Show the actual value (default: masked)",
+    ),
+) -> None:
+    """Retrieve a secret value.
+
+    By default, the value is masked for security. Use --show to display
+    the actual value.
+
+    Examples:
+
+    \b
+    # Check if a secret exists (masked output)
+    skillforge secret get API_KEY
+
+    \b
+    # Show the actual value
+    skillforge secret get API_KEY --show
+    """
+    from skillforge.secrets import (
+        get_secret_manager,
+        SecretNotFoundError,
+        SecretBackendError,
+    )
+
+    try:
+        manager = get_secret_manager()
+        value = manager.get(name)
+
+        if show:
+            console.print(f"[bold]{name}:[/bold] {value}")
+        else:
+            masked = "*" * min(len(value), 8)
+            console.print(f"[bold]{name}:[/bold] {masked} (use --show to reveal)")
+
+    except SecretNotFoundError:
+        console.print(f"[red]Secret not found:[/red] {name}")
+        console.print()
+        console.print("Use [bold]skillforge secret list[/bold] to see available secrets.")
+        raise typer.Exit(code=1)
+
+    except SecretBackendError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(code=1)
+
+
+@secret_app.command("list")
+def secret_list(
+    backend: Optional[str] = typer.Option(
+        None,
+        "--backend",
+        "-b",
+        help="Filter by backend",
+    ),
+) -> None:
+    """List all stored secrets.
+
+    Shows secret names and metadata, but not the actual values.
+
+    Examples:
+
+    \b
+    # List all secrets
+    skillforge secret list
+
+    \b
+    # List secrets from a specific backend
+    skillforge secret list --backend file
+    """
+    from rich.table import Table
+
+    from skillforge.secrets import get_secret_manager
+
+    manager = get_secret_manager()
+    secrets = manager.list(backend_name=backend)
+
+    if not secrets:
+        if backend:
+            console.print(f"[yellow]No secrets found in {backend} backend.[/yellow]")
+        else:
+            console.print("[yellow]No secrets stored.[/yellow]")
+        console.print()
+        console.print("Add secrets with: [bold]skillforge secret set <name>[/bold]")
+        return
+
+    console.print(f"[bold]Stored secrets ({len(secrets)}):[/bold]")
+    console.print()
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Name", style="cyan")
+    table.add_column("Backend")
+    table.add_column("Description")
+    table.add_column("Updated")
+
+    for secret in secrets:
+        updated = secret.updated_at[:10] if secret.updated_at else "-"
+        desc = secret.description[:30] + "..." if len(secret.description) > 30 else secret.description
+        table.add_row(
+            secret.name,
+            secret.backend,
+            desc or "-",
+            updated,
+        )
+
+    console.print(table)
+    console.print()
+    console.print("Use [cyan]{secret:name}[/cyan] syntax in skill files to reference secrets.")
+
+
+@secret_app.command("delete")
+def secret_delete(
+    name: str = typer.Argument(..., help="Secret name to delete"),
+    backend: Optional[str] = typer.Option(
+        None,
+        "--backend",
+        "-b",
+        help="Delete from specific backend (default: all)",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help="Skip confirmation",
+    ),
+) -> None:
+    """Delete a stored secret.
+
+    Examples:
+
+    \b
+    # Delete a secret (with confirmation)
+    skillforge secret delete API_KEY
+
+    \b
+    # Delete without confirmation
+    skillforge secret delete API_KEY --force
+    """
+    from skillforge.secrets import get_secret_manager, SecretBackendError
+
+    manager = get_secret_manager()
+
+    # Check if secret exists
+    if not manager.exists(name):
+        console.print(f"[red]Secret not found:[/red] {name}")
+        raise typer.Exit(code=1)
+
+    console.print(f"[bold]Delete secret:[/bold] {name}")
+
+    if not force:
+        confirm = typer.confirm("Are you sure?", default=False)
+        if not confirm:
+            console.print("Cancelled.")
+            return
+
+    try:
+        if manager.delete(name, backend_name=backend):
+            console.print(f"[green]Secret deleted:[/green] {name}")
+        else:
+            console.print(f"[red]Failed to delete secret:[/red] {name}")
+            raise typer.Exit(code=1)
+
+    except SecretBackendError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(code=1)
+
+
+@secret_app.command("backends")
+def secret_backends() -> None:
+    """Show available secret backends and their status."""
+    from rich.table import Table
+    import os
+
+    from skillforge.secrets import get_secret_manager, SECRETS_DIR
+
+    manager = get_secret_manager()
+
+    console.print("[bold]Secret Backends[/bold]")
+    console.print()
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Backend", style="cyan")
+    table.add_column("Status")
+    table.add_column("Description")
+
+    # Environment backend
+    env_secrets = [k for k in os.environ if k.startswith("SKILLFORGE_SECRET_")]
+    table.add_row(
+        "env",
+        f"[green]{len(env_secrets)} secret(s)[/green]" if env_secrets else "[dim]0 secrets[/dim]",
+        "Reads from SKILLFORGE_SECRET_* environment variables",
+    )
+
+    # File backend
+    if SECRETS_DIR.exists():
+        file_count = len([s for s in manager.list(backend_name="file")])
+        table.add_row(
+            "file",
+            f"[green]{file_count} secret(s)[/green]" if file_count else "[dim]0 secrets[/dim]",
+            f"Encrypted storage in {SECRETS_DIR}",
+        )
+    else:
+        table.add_row(
+            "file",
+            "[yellow]Not initialized[/yellow]",
+            "Run 'skillforge secret set' to initialize",
+        )
+
+    # Vault backend
+    vault_token = os.environ.get("VAULT_TOKEN")
+    vault_addr = os.environ.get("VAULT_ADDR", "http://localhost:8200")
+    if vault_token:
+        table.add_row(
+            "vault",
+            "[green]Configured[/green]",
+            f"HashiCorp Vault at {vault_addr}",
+        )
+    else:
+        table.add_row(
+            "vault",
+            "[dim]Not configured[/dim]",
+            "Set VAULT_ADDR and VAULT_TOKEN",
+        )
+
+    console.print(table)
+    console.print()
+    console.print("[bold]Priority:[/bold] env > file > vault")
+    console.print("Secrets from higher-priority backends are used first.")
 
 
 if __name__ == "__main__":
