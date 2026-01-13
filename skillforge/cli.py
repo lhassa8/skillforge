@@ -928,6 +928,7 @@ def run(
     dry_run: bool = typer.Option(False, "--dry-run", help="Print plan without executing"),
     interactive: bool = typer.Option(False, "--interactive", "-i", help="Interactive mode on failures"),
     env: Optional[List[str]] = typer.Option(None, "--env", "-e", help="Environment variables (KEY=VAL)"),
+    input_val: Optional[List[str]] = typer.Option(None, "--input", help="Skill input values (name=value)"),
 ) -> None:
     """Execute a skill against a target directory."""
     from rich.table import Table
@@ -946,6 +947,14 @@ def run(
             if "=" in e:
                 key, value = e.split("=", 1)
                 env_vars[key] = value
+
+    # Parse input overrides
+    input_overrides = {}
+    if input_val:
+        for inp in input_val:
+            if "=" in inp:
+                key, value = inp.split("=", 1)
+                input_overrides[key] = value
 
     # Warn about no-sandbox mode
     if no_sandbox:
@@ -973,6 +982,7 @@ def run(
             no_sandbox=no_sandbox,
             dry_run=dry_run,
             env_vars=env_vars if env_vars else None,
+            input_overrides=input_overrides if input_overrides else None,
         )
     except RunError as e:
         console.print(f"[red]Error: {e}[/red]")
