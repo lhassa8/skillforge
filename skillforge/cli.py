@@ -21,6 +21,9 @@ app.add_typer(cassette_app, name="cassette")
 import_app = typer.Typer(help="Import skills from external sources.")
 app.add_typer(import_app, name="import")
 
+ai_app = typer.Typer(help="AI-powered skill generation and assistance.")
+app.add_typer(ai_app, name="ai")
+
 
 @app.command()
 def init() -> None:
@@ -1506,6 +1509,384 @@ def lint(
         console.print("[green]No errors found.[/green]")
     else:
         console.print("[green]No issues found. Skill is valid.[/green]")
+
+
+# =============================================================================
+# AI Commands
+# =============================================================================
+
+
+@ai_app.command("generate")
+def ai_generate(
+    description: str = typer.Argument(..., help="Natural language description of the skill to create"),
+    out: Path = typer.Option(
+        Path("skills"),
+        "--out",
+        "-o",
+        help="Output directory for the generated skill",
+    ),
+    target: Optional[Path] = typer.Option(
+        None,
+        "--target",
+        "-t",
+        help="Target directory to analyze for context",
+    ),
+    provider: str = typer.Option(
+        "anthropic",
+        "--provider",
+        "-p",
+        help="AI provider: anthropic, openai, ollama",
+    ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="Model to use (provider-specific)",
+    ),
+    requirements: Optional[str] = typer.Option(
+        None,
+        "--requirements",
+        "-r",
+        help="Additional requirements or constraints",
+    ),
+) -> None:
+    """Generate a skill from natural language description using AI.
+
+    Examples:
+
+    \b
+    # Basic generation
+    skillforge ai generate "Set up a Python project with pytest and black"
+
+    \b
+    # With project context
+    skillforge ai generate "Add Docker support" --target ./myproject
+
+    \b
+    # Using different provider
+    skillforge ai generate "Create CI workflow" --provider openai
+
+    \b
+    # With additional requirements
+    skillforge ai generate "Deploy to AWS" --requirements "Use Terraform, support multiple environments"
+    """
+    from skillforge.ai_generator import (
+        generate_skill,
+        get_provider,
+        analyze_project,
+        AIGeneratorError,
+        ProviderNotConfiguredError,
+    )
+
+    console.print(f"[bold]AI Skill Generation[/bold]")
+    console.print(f"  Description: {description[:60]}{'...' if len(description) > 60 else ''}")
+    console.print(f"  Provider: {provider}")
+    if model:
+        console.print(f"  Model: {model}")
+    console.print()
+
+    # Analyze target if provided
+    if target:
+        target_path = target.resolve()
+        if target_path.exists():
+            from skillforge.ai_generator import analyze_project
+            ctx = analyze_project(target_path)
+            console.print(f"[dim]Analyzed project: {ctx.project_type or 'unknown'} ({ctx.framework or 'no framework'})[/dim]")
+        else:
+            console.print(f"[yellow]Target directory not found: {target}[/yellow]")
+            target = None
+
+    # Get provider
+    try:
+        llm_provider = get_provider(provider, model=model)
+        console.print(f"[dim]Using model: {llm_provider.model}[/dim]")
+    except ProviderNotConfiguredError as e:
+        console.print(f"[red]Provider error: {e}[/red]")
+        console.print()
+        console.print("[bold]Setup instructions:[/bold]")
+        if provider == "anthropic":
+            console.print("  export ANTHROPIC_API_KEY=your-api-key")
+        elif provider == "openai":
+            console.print("  export OPENAI_API_KEY=your-api-key")
+        elif provider == "ollama":
+            console.print("  Ensure Ollama is running: ollama serve")
+        raise typer.Exit(code=1)
+
+    console.print()
+    console.print("[dim]Generating skill...[/dim]")
+
+    try:
+        result = generate_skill(
+            description=description,
+            output_dir=out.resolve(),
+            provider=llm_provider,
+            target_dir=target.resolve() if target else None,
+            additional_requirements=requirements,
+        )
+    except AIGeneratorError as e:
+        console.print(f"[red]Generation failed: {e}[/red]")
+        raise typer.Exit(code=1)
+
+    console.print()
+
+    if result.success:
+        console.print("[green]Skill generated successfully![/green]")
+        console.print()
+        console.print(f"  Location: [bold]{result.skill_dir}[/bold]")
+        console.print(f"  Tokens used: {result.tokens_used}")
+        console.print()
+
+        if result.warnings:
+            console.print("[yellow]Warnings:[/yellow]")
+            for warning in result.warnings[:5]:
+                console.print(f"  - {warning}")
+            console.print()
+
+        console.print("[bold]Next steps:[/bold]")
+        console.print(f"  1. Review: [cyan]cat {result.skill_dir}/skill.yaml[/cyan]")
+        console.print(f"  2. Lint: [cyan]skillforge lint {result.skill_dir}[/cyan]")
+        console.print(f"  3. Test: [cyan]skillforge test {result.skill_dir}[/cyan]")
+        console.print(f"  4. Refine: [cyan]skillforge ai refine {result.skill_dir} \"your feedback\"[/cyan]")
+    else:
+        console.print(f"[red]Generation failed: {result.error}[/red]")
+        if result.skill_yaml:
+            console.print()
+            console.print("[dim]Partial YAML generated (may have errors):[/dim]")
+            console.print(result.skill_yaml[:500])
+        raise typer.Exit(code=1)
+
+
+@ai_app.command("refine")
+def ai_refine(
+    skill_dir: Path = typer.Argument(..., help="Path to the skill directory to refine"),
+    feedback: str = typer.Argument(..., help="Feedback or instructions for refinement"),
+    provider: str = typer.Option(
+        "anthropic",
+        "--provider",
+        "-p",
+        help="AI provider: anthropic, openai, ollama",
+    ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="Model to use (provider-specific)",
+    ),
+) -> None:
+    """Refine an existing skill based on feedback using AI.
+
+    Examples:
+
+    \b
+    # Fix issues
+    skillforge ai refine ./skills/my_skill "Add error handling for missing files"
+
+    \b
+    # Improve structure
+    skillforge ai refine ./skills/my_skill "Split into smaller steps"
+
+    \b
+    # Add features
+    skillforge ai refine ./skills/my_skill "Add support for TypeScript projects"
+    """
+    from skillforge.ai_generator import (
+        refine_skill,
+        get_provider,
+        AIGeneratorError,
+        ProviderNotConfiguredError,
+    )
+
+    skill_path = skill_dir.resolve()
+
+    if not (skill_path / "skill.yaml").exists():
+        console.print(f"[red]No skill.yaml found in {skill_path}[/red]")
+        raise typer.Exit(code=1)
+
+    console.print(f"[bold]AI Skill Refinement[/bold]")
+    console.print(f"  Skill: {skill_path.name}")
+    console.print(f"  Feedback: {feedback[:60]}{'...' if len(feedback) > 60 else ''}")
+    console.print()
+
+    # Get provider
+    try:
+        llm_provider = get_provider(provider, model=model)
+        console.print(f"[dim]Using: {llm_provider.name} / {llm_provider.model}[/dim]")
+    except ProviderNotConfiguredError as e:
+        console.print(f"[red]Provider error: {e}[/red]")
+        raise typer.Exit(code=1)
+
+    console.print()
+    console.print("[dim]Refining skill...[/dim]")
+
+    try:
+        result = refine_skill(
+            skill_dir=skill_path,
+            feedback=feedback,
+            provider=llm_provider,
+        )
+    except AIGeneratorError as e:
+        console.print(f"[red]Refinement failed: {e}[/red]")
+        raise typer.Exit(code=1)
+
+    console.print()
+
+    if result.success:
+        console.print("[green]Skill refined successfully![/green]")
+        console.print()
+        console.print(f"  Updated: {skill_path}/skill.yaml")
+        console.print(f"  Tokens used: {result.tokens_used}")
+        console.print()
+        console.print("[bold]Next steps:[/bold]")
+        console.print(f"  1. Review changes: [cyan]cat {skill_path}/skill.yaml[/cyan]")
+        console.print(f"  2. Lint: [cyan]skillforge lint {skill_path}[/cyan]")
+        console.print(f"  3. Test: [cyan]skillforge test {skill_path}[/cyan]")
+    else:
+        console.print(f"[red]Refinement failed: {result.error}[/red]")
+        raise typer.Exit(code=1)
+
+
+@ai_app.command("explain")
+def ai_explain(
+    skill_dir: Path = typer.Argument(..., help="Path to the skill directory to explain"),
+    provider: str = typer.Option(
+        "anthropic",
+        "--provider",
+        "-p",
+        help="AI provider: anthropic, openai, ollama",
+    ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="Model to use (provider-specific)",
+    ),
+) -> None:
+    """Generate a plain-English explanation of what a skill does.
+
+    Useful for understanding complex skills or generating documentation.
+
+    Example:
+
+    \b
+    skillforge ai explain ./skills/deploy_app
+    """
+    from skillforge.ai_generator import (
+        explain_skill,
+        get_provider,
+        AIGeneratorError,
+        ProviderNotConfiguredError,
+    )
+
+    skill_path = skill_dir.resolve()
+
+    if not (skill_path / "skill.yaml").exists():
+        console.print(f"[red]No skill.yaml found in {skill_path}[/red]")
+        raise typer.Exit(code=1)
+
+    console.print(f"[bold]AI Skill Explanation[/bold]")
+    console.print(f"  Skill: {skill_path.name}")
+    console.print()
+
+    # Get provider
+    try:
+        llm_provider = get_provider(provider, model=model)
+        console.print(f"[dim]Using: {llm_provider.name} / {llm_provider.model}[/dim]")
+    except ProviderNotConfiguredError as e:
+        console.print(f"[red]Provider error: {e}[/red]")
+        raise typer.Exit(code=1)
+
+    console.print()
+    console.print("[dim]Analyzing skill...[/dim]")
+    console.print()
+
+    try:
+        explanation, tokens = explain_skill(
+            skill_dir=skill_path,
+            provider=llm_provider,
+        )
+    except AIGeneratorError as e:
+        console.print(f"[red]Explanation failed: {e}[/red]")
+        raise typer.Exit(code=1)
+
+    console.print("[bold]Explanation:[/bold]")
+    console.print()
+    console.print(explanation)
+    console.print()
+    console.print(f"[dim]Tokens used: {tokens}[/dim]")
+
+
+@ai_app.command("providers")
+def ai_providers() -> None:
+    """Show available AI providers and their configuration status."""
+    import os
+    from rich.table import Table
+
+    console.print("[bold]AI Provider Configuration[/bold]")
+    console.print()
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Provider", style="cyan")
+    table.add_column("Status")
+    table.add_column("Model")
+    table.add_column("Setup")
+
+    # Check Anthropic
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+    if anthropic_key:
+        table.add_row(
+            "anthropic",
+            "[green]Configured[/green]",
+            "claude-sonnet-4-20250514",
+            "ANTHROPIC_API_KEY set"
+        )
+    else:
+        table.add_row(
+            "anthropic",
+            "[yellow]Not configured[/yellow]",
+            "claude-sonnet-4-20250514",
+            "export ANTHROPIC_API_KEY=..."
+        )
+
+    # Check OpenAI
+    openai_key = os.environ.get("OPENAI_API_KEY")
+    if openai_key:
+        table.add_row(
+            "openai",
+            "[green]Configured[/green]",
+            "gpt-4o",
+            "OPENAI_API_KEY set"
+        )
+    else:
+        table.add_row(
+            "openai",
+            "[yellow]Not configured[/yellow]",
+            "gpt-4o",
+            "export OPENAI_API_KEY=..."
+        )
+
+    # Check Ollama (try to connect)
+    ollama_status = "[yellow]Unknown[/yellow]"
+    try:
+        import httpx
+        response = httpx.get("http://localhost:11434/api/tags", timeout=2.0)
+        if response.status_code == 200:
+            ollama_status = "[green]Running[/green]"
+    except Exception:
+        ollama_status = "[red]Not running[/red]"
+
+    table.add_row(
+        "ollama",
+        ollama_status,
+        "llama3.2",
+        "ollama serve"
+    )
+
+    console.print(table)
+    console.print()
+    console.print("[bold]Usage:[/bold]")
+    console.print("  skillforge ai generate \"description\" --provider anthropic")
+    console.print("  skillforge ai generate \"description\" --provider openai --model gpt-4-turbo")
+    console.print("  skillforge ai generate \"description\" --provider ollama --model codellama")
 
 
 if __name__ == "__main__":

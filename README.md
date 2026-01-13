@@ -184,6 +184,85 @@ skillforge import github-action workflow.yml --out ./skills
 
 Shell steps (`run:`) are converted directly. Action steps (`uses:`) are added as placeholders requiring manual conversion.
 
+### AI-Powered Skill Generation
+
+Use natural language to generate skills with AI. Supports multiple providers: Anthropic Claude, OpenAI GPT, and local Ollama models.
+
+#### Setup
+
+Configure your preferred AI provider:
+
+```bash
+# Option 1: Anthropic Claude (recommended)
+export ANTHROPIC_API_KEY=your-api-key
+pip install anthropic
+
+# Option 2: OpenAI GPT
+export OPENAI_API_KEY=your-api-key
+pip install openai
+
+# Option 3: Ollama (local, no API key needed)
+ollama serve  # Start Ollama server
+```
+
+Check provider status:
+
+```bash
+skillforge ai providers
+```
+
+#### `skillforge ai generate`
+
+Generate a skill from natural language description.
+
+```bash
+# Basic generation
+skillforge ai generate "Set up a Python project with pytest and black"
+
+# With project context (analyzes target directory)
+skillforge ai generate "Add Docker support" --target ./myproject
+
+# Using specific provider
+skillforge ai generate "Create CI workflow" --provider openai
+
+# With custom model
+skillforge ai generate "Deploy to AWS" --provider anthropic --model claude-3-haiku-20240307
+
+# With additional requirements
+skillforge ai generate "Set up monitoring" --requirements "Use Prometheus, include Grafana dashboards"
+```
+
+The AI will:
+1. Analyze your project structure (if `--target` provided)
+2. Generate a complete skill.yaml with steps and checks
+3. Create the skill directory with all boilerplate files
+4. Validate the output and suggest next steps
+
+#### `skillforge ai refine`
+
+Refine an existing skill based on feedback.
+
+```bash
+# Fix issues
+skillforge ai refine ./skills/my_skill "Add error handling for missing files"
+
+# Improve structure
+skillforge ai refine ./skills/my_skill "Split into smaller steps"
+
+# Add features
+skillforge ai refine ./skills/my_skill "Add support for TypeScript projects"
+```
+
+#### `skillforge ai explain`
+
+Generate a plain-English explanation of what a skill does.
+
+```bash
+skillforge ai explain ./skills/deploy_app
+```
+
+Useful for understanding complex skills or generating documentation.
+
 ### Recording Skills
 
 Record your terminal session to create skills from real work.
