@@ -1,0 +1,11 @@
+# Fixture configuration for happy_path test
+# This fixture tests basic README generation
+
+inputs:
+  project_name: "my-awesome-app"
+  project_description: "An awesome application that does amazing things"
+  author: "Test Author"
+  license: "MIT"
+
+# Allow extra files that might be created
+allow_extra_files: false

@@ -1,0 +1,8 @@
+# Fixture for testing Python project CI generation
+
+inputs:
+  project_type: "python"
+  python_versions: "3.11,3.12"
+  enable_dependabot: "true"
+
+allow_extra_files: false

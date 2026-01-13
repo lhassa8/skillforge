@@ -1,0 +1,61 @@
+SKILL: add_readme
+=================
+
+DESCRIPTION
+-----------
+Add a README.md file to a project with customizable content. This skill
+creates a professional README template along with a LICENSE file and
+.gitignore for Node.js projects.
+
+Use this skill to quickly bootstrap documentation for new projects or
+to standardize README format across multiple repositories.
+
+INPUTS
+------
+- target_dir: path (required) - Target directory for the project
+- project_name: string (required) - Name of the project
+- project_description: string (default: "A new project") - Short description
+- author: string (optional) - Author name for LICENSE
+- license: string (default: "MIT") - License type
+
+PRECONDITIONS
+-------------
+- Target directory must exist
+- No existing README.md (or will be overwritten)
+
+STEPS
+-----
+1. Create README.md
+   - Generate a README with project name, description, and sections
+   - Includes: Installation, Usage, Contributing, License sections
+
+2. Create LICENSE file
+   - Generate LICENSE based on license type input
+   - Full MIT license text for MIT, placeholder for others
+
+3. Create .gitignore
+   - Standard Node.js .gitignore template
+   - Covers: node_modules, build output, IDE files, OS files, logs
+
+CHECKS
+------
+- README.md exists in sandbox directory
+- README.md contains the project name as title
+- LICENSE file exists
+- .gitignore file exists
+- License creation step exits with code 0
+
+EXAMPLE USAGE
+-------------
+Run this skill to add documentation to a new project:
+
+    skillforge run examples/add_readme \
+        --target ./my-new-project \
+        -e project_name=my-app \
+        -e project_description="A fantastic new application" \
+        -e author="Jane Doe"
+
+FIXTURE: happy_path
+-------------------
+Tests the skill with a minimal project containing only a package.json.
+Verifies that README.md, LICENSE, and .gitignore are created correctly.

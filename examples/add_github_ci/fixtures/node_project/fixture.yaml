@@ -1,0 +1,8 @@
+# Fixture for testing Node.js project CI generation
+
+inputs:
+  project_type: "node"
+  node_versions: "20,22"
+  enable_dependabot: "true"
+
+allow_extra_files: false

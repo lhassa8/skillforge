@@ -1,0 +1,158 @@
+name: add_readme
+version: "0.1.0"
+description: "Add a README.md file to a project with customizable content"
+
+inputs:
+  - name: target_dir
+    type: path
+    description: "Target directory for the project"
+    required: true
+
+  - name: project_name
+    type: string
+    description: "Name of the project"
+    required: true
+
+  - name: project_description
+    type: string
+    description: "Short description of the project"
+    required: false
+    default: "A new project"
+
+  - name: author
+    type: string
+    description: "Author name"
+    required: false
+    default: ""
+
+  - name: license
+    type: string
+    description: "License type (MIT, Apache-2.0, GPL-3.0, etc.)"
+    required: false
+    default: "MIT"
+
+preconditions:
+  - "Target directory must exist"
+  - "No existing README.md (or will be overwritten)"
+
+steps:
+  - id: create_readme
+    type: file.template
+    name: "Create README.md"
+    path: "{sandbox_dir}/README.md"
+    template: |
+      # {project_name}
+
+      {project_description}
+
+      ## Installation
+
+      ```bash
+      # Clone the repository
+      git clone https://github.com/username/{project_name}.git
+      cd {project_name}
+
+      # Install dependencies
+      npm install
+      ```
+
+      ## Usage
+
+      ```bash
+      npm start
+      ```
+
+      ## Contributing
+
+      Contributions are welcome! Please feel free to submit a Pull Request.
+
+      ## License
+
+      This project is licensed under the {license} License - see the LICENSE file for details.
+
+  - id: create_license
+    type: shell
+    name: "Create LICENSE file"
+    command: |
+      if [ "{license}" = "MIT" ]; then
+        cat > LICENSE << 'LICEOF'
+      MIT License
+
+      Copyright (c) 2024 {author}
+
+      Permission is hereby granted, free of charge, to any person obtaining a copy
+      of this software and associated documentation files (the "Software"), to deal
+      in the Software without restriction, including without limitation the rights
+      to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+      copies of the Software, and to permit persons to whom the Software is
+      furnished to do so, subject to the following conditions:
+
+      The above copyright notice and this permission notice shall be included in all
+      copies or substantial portions of the Software.
+
+      THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+      IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+      FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+      AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+      LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+      OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+      SOFTWARE.
+      LICEOF
+      else
+        echo "License: {license}" > LICENSE
+        echo "See https://choosealicense.com/licenses/ for full text." >> LICENSE
+      fi
+    cwd: "{sandbox_dir}"
+
+  - id: create_gitignore
+    type: file.template
+    name: "Create .gitignore"
+    path: "{sandbox_dir}/.gitignore"
+    template: |
+      # Dependencies
+      node_modules/
+
+      # Build output
+      dist/
+      build/
+
+      # IDE
+      .idea/
+      .vscode/
+      *.swp
+      *.swo
+
+      # OS
+      .DS_Store
+      Thumbs.db
+
+      # Environment
+      .env
+      .env.local
+
+      # Logs
+      *.log
+      npm-debug.log*
+
+checks:
+  - id: check_readme_exists
+    type: file_exists
+    path: "{sandbox_dir}/README.md"
+
+  - id: check_readme_has_title
+    type: file_contains
+    path: "{sandbox_dir}/README.md"
+    contains: "# {project_name}"
+
+  - id: check_license_exists
+    type: file_exists
+    path: "{sandbox_dir}/LICENSE"
+
+  - id: check_gitignore_exists
+    type: file_exists
+    path: "{sandbox_dir}/.gitignore"
+
+  - id: check_license_step
+    type: exit_code
+    step_id: create_license
+    equals: 0

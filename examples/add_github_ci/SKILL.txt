@@ -1,0 +1,91 @@
+SKILL: add_github_ci
+====================
+
+DESCRIPTION
+-----------
+Add GitHub Actions CI/CD workflow to a project. This skill automatically
+detects the project type (Python or Node.js) and creates an appropriate
+CI workflow with testing, linting, and optional Dependabot configuration.
+
+Use this skill to quickly add professional CI/CD to any project, ensuring
+code quality and automated testing on every push and pull request.
+
+INPUTS
+------
+- target_dir: path (required) - Target directory for the project
+- project_type: string (default: "auto") - Project type: python, node, or auto
+- python_versions: string (default: "3.10,3.11,3.12") - Python versions to test
+- node_versions: string (default: "18,20,22") - Node.js versions to test
+- enable_dependabot: string (default: "true") - Enable Dependabot updates
+
+PRECONDITIONS
+-------------
+- Target directory should contain project files (package.json, pyproject.toml, etc.)
+- Git repository recommended (but not required)
+
+STEPS
+-----
+1. Create .github/workflows directory
+   - Ensures the GitHub Actions directory structure exists
+
+2. Detect project type
+   - Auto-detects Python or Node.js based on project files
+   - Can be overridden with project_type input
+
+3. Create Python CI workflow (if Python project)
+   - Multi-version Python testing matrix
+   - Installs dependencies from pyproject.toml or requirements.txt
+   - Runs ruff for linting
+   - Runs pytest with coverage
+   - Uploads coverage to Codecov
+
+4. Create Node.js CI workflow (if Node project)
+   - Multi-version Node.js testing matrix
+   - Installs dependencies with npm ci
+   - Runs lint and test scripts
+   - Runs build script
+
+5. Create Dependabot configuration
+   - Weekly updates for GitHub Actions
+   - Weekly updates for pip/npm dependencies
+   - Ignores patch version updates to reduce noise
+
+CHECKS
+------
+- .github/workflows directory exists
+- ci.yml workflow file exists
+- Workflow contains jobs definition
+- Workflow uses actions/checkout
+- Directory creation step succeeds
+
+GENERATED FILES
+---------------
+.github/
+├── workflows/
+│   └── ci.yml          # Main CI workflow
+└── dependabot.yml      # Dependency update configuration
+
+EXAMPLE USAGE
+-------------
+Add CI to a Python project:
+
+    skillforge run examples/add_github_ci \
+        --target ./my-python-project \
+        -e python_versions="3.11,3.12"
+
+Add CI to a Node.js project:
+
+    skillforge run examples/add_github_ci \
+        --target ./my-node-project \
+        -e project_type=node \
+        -e node_versions="20,22"
+
+Auto-detect and add CI:
+
+    skillforge run examples/add_github_ci \
+        --target ./my-project
+
+FIXTURES
+--------
+- python_project: Tests CI generation for a Python project
+- node_project: Tests CI generation for a Node.js project
