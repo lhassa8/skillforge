@@ -1,0 +1,30 @@
+SKILL: add_gitignore
+====================
+
+DESCRIPTION
+-----------
+Creates a .gitignore file for different project types
+
+PRECONDITIONS
+-------------
+- Target directory must exist
+- Target directory should be a git repository
+
+INPUTS
+------
+- target_dir: Path to the target directory (required)
+
+STEPS
+-----
+1. Example step
+   - Run: echo 'Hello from add_gitignore'
+   - Working directory: target_dir
+
+EXPECTED OUTCOMES
+-----------------
+- Example step completes successfully (exit code 0)
+
+NOTES
+-----
+- This is a scaffold. Customize the steps and checks as needed.
+- Add more detailed documentation here.

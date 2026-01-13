@@ -1,0 +1,8 @@
+# Fixture configuration for python_project test
+# This fixture tests gitignore generation for Python projects
+
+inputs:
+  project_type: "python"
+
+# Allow extra files that might be created
+allow_extra_files: false

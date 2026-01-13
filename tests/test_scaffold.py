@@ -49,13 +49,16 @@ class TestGenerateSkillYaml:
         assert len(parsed["steps"]) > 0
         assert parsed["steps"][0]["type"] == "shell"
 
-    def test_has_target_dir_input(self):
-        """Test that target_dir input is included."""
+    def test_has_example_input(self):
+        """Test that an example input is included."""
         content = generate_skill_yaml("test_skill")
         parsed = yaml.safe_load(content)
 
         input_names = [i["name"] for i in parsed["inputs"]]
-        assert "target_dir" in input_names
+        assert "message" in input_names
+        # Verify it has a default so fixture works out of the box
+        message_input = next(i for i in parsed["inputs"] if i["name"] == "message")
+        assert "default" in message_input
 
 
 class TestGenerateSkillTxt:

@@ -23,27 +23,27 @@ def generate_skill_yaml(name: str, description: str = "") -> str:
         version="0.1.0",
         description=description or f"TODO: Describe what {name} does",
         requirements={
-            "commands": ["git"],  # Example requirement
+            "commands": [],  # Add required commands here
         },
         inputs=[
             SkillInput(
-                name="target_dir",
-                type=InputType.PATH,
-                description="Target directory to run the skill against",
-                required=True,
+                name="message",
+                type=InputType.STRING,
+                description="A greeting message to display",
+                required=False,
+                default="Hello, World!",
             ),
         ],
         preconditions=[
             "Target directory exists",
-            "Target directory is a git repository",
         ],
         steps=[
             Step(
                 id="example_step",
                 type=StepType.SHELL,
                 name="Example step",
-                command=f"echo 'Hello from {name}'",
-                cwd="{target_dir}",
+                command="echo '{message}'",
+                cwd="{sandbox_dir}",
             ),
         ],
         checks=[
@@ -78,17 +78,16 @@ DESCRIPTION
 PRECONDITIONS
 -------------
 - Target directory must exist
-- Target directory should be a git repository
 
 INPUTS
 ------
-- target_dir: Path to the target directory (required)
+- message: A greeting message to display (optional, default: "Hello, World!")
 
 STEPS
 -----
 1. Example step
-   - Run: echo 'Hello from {name}'
-   - Working directory: target_dir
+   - Run: echo '{{message}}'
+   - Working directory: sandbox_dir
 
 EXPECTED OUTCOMES
 -----------------
@@ -97,7 +96,8 @@ EXPECTED OUTCOMES
 NOTES
 -----
 - This is a scaffold. Customize the steps and checks as needed.
-- Add more detailed documentation here.
+- Use {{sandbox_dir}} for the working directory in steps.
+- Use {{target_dir}} to reference the original target path.
 """
 
 
@@ -141,11 +141,11 @@ def generate_fixture_yaml() -> str:
     return """# Fixture configuration
 # Override skill inputs for this fixture
 
-# inputs:
-#   target_dir: "."  # Usually left as default
-#   some_input: "fixture-specific-value"
+inputs:
+  message: "Hello from fixture!"
 
-# allow_extra_files: false  # Set to true to allow files not in expected/
+# Set to true to allow files in output that aren't in expected/
+allow_extra_files: true
 """
 
 
