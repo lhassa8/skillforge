@@ -263,6 +263,127 @@ skillforge ai explain ./skills/deploy_app
 
 Useful for understanding complex skills or generating documentation.
 
+### Skill Registry
+
+Share and discover skills through registries. SkillForge supports local registries for development and Git-based registries for team sharing.
+
+#### Managing Registries
+
+```bash
+# List configured registries
+skillforge registry list
+
+# Add a Git-based registry
+skillforge registry add mycompany https://github.com/mycompany/skills-registry
+
+# Add a local registry for testing
+skillforge registry add local-dev /path/to/registry --type local
+
+# Remove a registry
+skillforge registry remove mycompany
+
+# Sync/refresh registry indexes
+skillforge registry sync
+```
+
+#### Searching and Installing Skills
+
+```bash
+# Search for skills
+skillforge search docker
+skillforge search "python setup"
+
+# Install a skill (latest version)
+skillforge install setup-python
+
+# Install specific version
+skillforge install setup-python --version 1.2.0
+
+# Install with version constraint
+skillforge install setup-python --version ">=1.0.0,<2.0.0"
+
+# List installed skills
+skillforge installed
+
+# Uninstall a skill
+skillforge uninstall setup-python
+```
+
+#### Publishing Skills
+
+```bash
+# Package a skill (creates .tar.gz)
+skillforge pack ./skills/my_skill
+
+# Publish to local registry
+skillforge publish ./skills/my_skill
+
+# Publish with author info
+skillforge publish ./skills/my_skill --author "John Doe <john@example.com>"
+```
+
+#### Updating Skills
+
+```bash
+# Check for available updates
+skillforge update --check
+
+# Update all installed skills
+skillforge update
+
+# Update specific skill
+skillforge update my_skill
+```
+
+#### Version Constraints
+
+SkillForge supports semantic versioning with flexible constraints:
+
+| Constraint | Meaning |
+|------------|---------|
+| `1.2.3` | Exact version |
+| `*` | Any version |
+| `1.2.*` | Any 1.2.x version |
+| `^1.2.3` | >=1.2.3, <2.0.0 |
+| `~1.2.3` | >=1.2.3, <1.3.0 |
+| `>=1.0.0` | 1.0.0 or higher |
+| `>=1.0.0,<2.0.0` | Range |
+
+#### Creating a Registry
+
+A registry is a directory or Git repository with this structure:
+
+```
+registry/
+├── index.json          # Skills index
+└── packages/           # Skill tarballs
+    ├── skill-1.0.0.tar.gz
+    └── other-skill-2.1.0.tar.gz
+```
+
+The `index.json` format:
+
+```json
+{
+  "skills": {
+    "skill-name": {
+      "name": "skill-name",
+      "description": "What it does",
+      "author": "Author Name",
+      "tags": ["tag1", "tag2"],
+      "versions": [
+        {
+          "version": "1.0.0",
+          "published_at": "2024-01-01T00:00:00",
+          "checksum": "sha256...",
+          "size_bytes": 1024
+        }
+      ]
+    }
+  }
+}
+```
+
 ### Recording Skills
 
 Record your terminal session to create skills from real work.

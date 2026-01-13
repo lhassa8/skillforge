@@ -24,6 +24,9 @@ app.add_typer(import_app, name="import")
 ai_app = typer.Typer(help="AI-powered skill generation and assistance.")
 app.add_typer(ai_app, name="ai")
 
+registry_app = typer.Typer(help="Manage skill registries.")
+app.add_typer(registry_app, name="registry")
+
 
 @app.command()
 def init() -> None:
@@ -1887,6 +1890,523 @@ def ai_providers() -> None:
     console.print("  skillforge ai generate \"description\" --provider anthropic")
     console.print("  skillforge ai generate \"description\" --provider openai --model gpt-4-turbo")
     console.print("  skillforge ai generate \"description\" --provider ollama --model codellama")
+
+
+# =============================================================================
+# Registry Commands
+# =============================================================================
+
+
+@registry_app.command("add")
+def registry_add(
+    name: str = typer.Argument(..., help="Name for the registry"),
+    url: str = typer.Argument(..., help="Registry URL (git repo or local path)"),
+    registry_type: str = typer.Option(
+        "git",
+        "--type",
+        "-t",
+        help="Registry type: git, local",
+    ),
+    priority: int = typer.Option(
+        50,
+        "--priority",
+        "-p",
+        help="Priority (lower = higher priority)",
+    ),
+) -> None:
+    """Add a new skill registry source.
+
+    Examples:
+
+    \b
+    # Add a Git registry
+    skillforge registry add mycompany https://github.com/mycompany/skills-registry
+
+    \b
+    # Add a local registry for testing
+    skillforge registry add local-dev /path/to/local/registry --type local
+    """
+    from skillforge.registry import RegistryManager, RegistryError
+
+    try:
+        manager = RegistryManager()
+        config = manager.add_registry(name, url, registry_type, priority)
+
+        console.print(f"[green]Registry added:[/green] {name}")
+        console.print(f"  URL: {url}")
+        console.print(f"  Type: {registry_type}")
+        console.print(f"  Priority: {priority}")
+        console.print()
+        console.print("Run [bold]skillforge registry sync[/bold] to fetch the index.")
+
+    except RegistryError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(code=1)
+
+
+@registry_app.command("remove")
+def registry_remove(
+    name: str = typer.Argument(..., help="Name of the registry to remove"),
+) -> None:
+    """Remove a skill registry source."""
+    from skillforge.registry import RegistryManager
+
+    manager = RegistryManager()
+    if manager.remove_registry(name):
+        console.print(f"[green]Registry removed:[/green] {name}")
+    else:
+        console.print(f"[red]Registry not found:[/red] {name}")
+        raise typer.Exit(code=1)
+
+
+@registry_app.command("list")
+def registry_list() -> None:
+    """List configured skill registries."""
+    from rich.table import Table
+
+    from skillforge.registry import RegistryManager
+
+    manager = RegistryManager()
+    registries = manager.list_registries()
+
+    if not registries:
+        console.print("[yellow]No registries configured.[/yellow]")
+        console.print()
+        console.print("Add a registry with:")
+        console.print("  skillforge registry add <name> <url>")
+        return
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Name", style="cyan")
+    table.add_column("Type")
+    table.add_column("URL")
+    table.add_column("Priority")
+    table.add_column("Enabled")
+
+    for reg in registries:
+        table.add_row(
+            reg.name,
+            reg.type,
+            reg.url[:50] + "..." if len(reg.url) > 50 else reg.url,
+            str(reg.priority),
+            "[green]Yes[/green]" if reg.enabled else "[red]No[/red]",
+        )
+
+    console.print(table)
+
+
+@registry_app.command("sync")
+def registry_sync(
+    name: Optional[str] = typer.Argument(None, help="Specific registry to sync (default: all)"),
+) -> None:
+    """Sync/refresh skill registry indexes."""
+    from skillforge.registry import RegistryManager, RegistryError
+
+    manager = RegistryManager()
+
+    if name:
+        # Sync specific registry
+        registry = next(
+            (r for r in manager.registries if r.config.name == name),
+            None
+        )
+        if not registry:
+            console.print(f"[red]Registry not found:[/red] {name}")
+            raise typer.Exit(code=1)
+
+        console.print(f"[dim]Syncing {name}...[/dim]")
+        try:
+            if registry.sync():
+                skills = registry.list_skills()
+                console.print(f"[green]Synced:[/green] {name} ({len(skills)} skills)")
+            else:
+                console.print(f"[yellow]Warning:[/yellow] No index found for {name}")
+        except RegistryError as e:
+            console.print(f"[red]Error syncing {name}:[/red] {e}")
+            raise typer.Exit(code=1)
+    else:
+        # Sync all
+        results = manager.sync_all()
+
+        for reg_name, success in results.items():
+            if success:
+                registry = next(
+                    (r for r in manager.registries if r.config.name == reg_name),
+                    None
+                )
+                count = len(registry.list_skills()) if registry else 0
+                console.print(f"[green]Synced:[/green] {reg_name} ({count} skills)")
+            else:
+                console.print(f"[red]Failed:[/red] {reg_name}")
+
+
+@app.command()
+def search(
+    query: str = typer.Argument(..., help="Search query"),
+) -> None:
+    """Search for skills in registries.
+
+    Examples:
+
+    \b
+    skillforge search docker
+    skillforge search "python setup"
+    skillforge search ci
+    """
+    from rich.table import Table
+
+    from skillforge.registry import RegistryManager
+
+    manager = RegistryManager()
+    results = manager.search(query)
+
+    if not results:
+        console.print(f"[yellow]No skills found matching:[/yellow] {query}")
+        console.print()
+        console.print("Try running [bold]skillforge registry sync[/bold] to update indexes.")
+        return
+
+    console.print(f"[bold]Found {len(results)} skill(s):[/bold]")
+    console.print()
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Name", style="cyan")
+    table.add_column("Version")
+    table.add_column("Description")
+    table.add_column("Registry")
+
+    for registry_name, meta in results:
+        table.add_row(
+            meta.name,
+            meta.latest_version or "-",
+            meta.description[:50] + "..." if len(meta.description) > 50 else meta.description,
+            registry_name,
+        )
+
+    console.print(table)
+    console.print()
+    console.print("Install with: [bold]skillforge install <name>[/bold]")
+
+
+@app.command()
+def install(
+    name: str = typer.Argument(..., help="Skill name to install"),
+    version: Optional[str] = typer.Option(
+        None,
+        "--version",
+        "-v",
+        help="Version constraint (default: latest)",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help="Reinstall if already installed",
+    ),
+) -> None:
+    """Install a skill from a registry.
+
+    Examples:
+
+    \b
+    # Install latest version
+    skillforge install setup-python
+
+    \b
+    # Install specific version
+    skillforge install setup-python --version 1.2.0
+
+    \b
+    # Install with version constraint
+    skillforge install setup-python --version ">=1.0.0,<2.0.0"
+    """
+    from skillforge.registry import (
+        RegistryManager,
+        SkillNotFoundError,
+        VersionNotFoundError,
+        InstallError,
+    )
+
+    console.print(f"[bold]Installing:[/bold] {name}" + (f"@{version}" if version else ""))
+    console.print()
+
+    manager = RegistryManager()
+
+    try:
+        installed = manager.install(name, version, force)
+
+        console.print("[green]Successfully installed![/green]")
+        console.print()
+        console.print(f"  Name: {installed.name}")
+        console.print(f"  Version: {installed.version}")
+        console.print(f"  Path: {installed.path}")
+        console.print()
+        console.print(f"Run with: [bold]skillforge run {installed.path} --target <dir>[/bold]")
+
+    except SkillNotFoundError:
+        console.print(f"[red]Skill not found:[/red] {name}")
+        console.print()
+        console.print("Try [bold]skillforge search {name}[/bold] to find similar skills.")
+        raise typer.Exit(code=1)
+
+    except VersionNotFoundError as e:
+        console.print(f"[red]Version not found:[/red] {e}")
+        raise typer.Exit(code=1)
+
+    except InstallError as e:
+        console.print(f"[red]Installation failed:[/red] {e}")
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def uninstall(
+    name: str = typer.Argument(..., help="Skill name to uninstall"),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help="Skip confirmation",
+    ),
+) -> None:
+    """Uninstall an installed skill."""
+    from skillforge.registry import RegistryManager
+
+    manager = RegistryManager()
+    installed = manager.get_installed(name)
+
+    if not installed:
+        console.print(f"[red]Skill not installed:[/red] {name}")
+        raise typer.Exit(code=1)
+
+    console.print(f"[bold]Uninstall:[/bold] {name}@{installed.version}")
+    console.print(f"  Path: {installed.path}")
+    console.print()
+
+    if not force:
+        confirm = typer.confirm("Are you sure?", default=False)
+        if not confirm:
+            console.print("Cancelled.")
+            return
+
+    if manager.uninstall(name):
+        console.print(f"[green]Uninstalled:[/green] {name}")
+    else:
+        console.print(f"[red]Failed to uninstall:[/red] {name}")
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def installed() -> None:
+    """List installed skills."""
+    from rich.table import Table
+
+    from skillforge.registry import RegistryManager
+
+    manager = RegistryManager()
+    skills = manager.list_installed()
+
+    if not skills:
+        console.print("[yellow]No skills installed.[/yellow]")
+        console.print()
+        console.print("Install skills with: [bold]skillforge install <name>[/bold]")
+        return
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Name", style="cyan")
+    table.add_column("Version")
+    table.add_column("Installed")
+    table.add_column("Source")
+
+    for skill in skills:
+        table.add_row(
+            skill.name,
+            skill.version,
+            skill.installed_at[:10],
+            skill.source_registry,
+        )
+
+    console.print(table)
+
+
+@app.command()
+def publish(
+    skill_dir: Path = typer.Argument(..., help="Path to skill directory"),
+    registry_name: Optional[str] = typer.Option(
+        None,
+        "--registry",
+        "-r",
+        help="Target registry (default: first local registry)",
+    ),
+    author: str = typer.Option(
+        "",
+        "--author",
+        "-a",
+        help="Author name/email",
+    ),
+) -> None:
+    """Publish a skill to a registry.
+
+    Examples:
+
+    \b
+    # Publish to default local registry
+    skillforge publish ./skills/my_skill
+
+    \b
+    # Publish with author info
+    skillforge publish ./skills/my_skill --author "John Doe <john@example.com>"
+    """
+    from skillforge.registry import publish_skill, PublishError, RegistryError
+
+    skill_path = skill_dir.resolve()
+
+    if not (skill_path / "skill.yaml").exists():
+        console.print(f"[red]No skill.yaml found in {skill_path}[/red]")
+        raise typer.Exit(code=1)
+
+    console.print(f"[bold]Publishing:[/bold] {skill_path.name}")
+    console.print()
+
+    try:
+        package_path, metadata = publish_skill(skill_path, registry_name, author)
+
+        console.print("[green]Successfully published![/green]")
+        console.print()
+        console.print(f"  Name: {metadata.name}")
+        console.print(f"  Version: {metadata.versions[0].version}")
+        console.print(f"  Checksum: {metadata.versions[0].checksum[:16]}...")
+        console.print(f"  Package: {package_path}")
+
+    except (PublishError, RegistryError) as e:
+        console.print(f"[red]Publish failed:[/red] {e}")
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def pack(
+    skill_dir: Path = typer.Argument(..., help="Path to skill directory"),
+    output: Optional[Path] = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Output path for package",
+    ),
+) -> None:
+    """Package a skill into a distributable tarball.
+
+    Creates a .tar.gz file that can be shared or published.
+    """
+    from skillforge.registry import pack_skill, PackageError
+
+    skill_path = skill_dir.resolve()
+
+    if not (skill_path / "skill.yaml").exists():
+        console.print(f"[red]No skill.yaml found in {skill_path}[/red]")
+        raise typer.Exit(code=1)
+
+    console.print(f"[bold]Packaging:[/bold] {skill_path.name}")
+
+    try:
+        package_path = pack_skill(skill_path, output)
+
+        console.print("[green]Package created![/green]")
+        console.print()
+        console.print(f"  Path: {package_path}")
+        console.print(f"  Size: {package_path.stat().st_size:,} bytes")
+
+    except PackageError as e:
+        console.print(f"[red]Packaging failed:[/red] {e}")
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def update(
+    name: Optional[str] = typer.Argument(None, help="Specific skill to update (default: all)"),
+    check_only: bool = typer.Option(
+        False,
+        "--check",
+        "-c",
+        help="Only check for updates, don't install",
+    ),
+) -> None:
+    """Update installed skills to latest versions.
+
+    Examples:
+
+    \b
+    # Check for updates
+    skillforge update --check
+
+    \b
+    # Update all skills
+    skillforge update
+
+    \b
+    # Update specific skill
+    skillforge update my_skill
+    """
+    from rich.table import Table
+
+    from skillforge.registry import RegistryManager
+
+    manager = RegistryManager()
+
+    if name:
+        # Update specific skill
+        installed = manager.get_installed(name)
+        if not installed:
+            console.print(f"[red]Skill not installed:[/red] {name}")
+            raise typer.Exit(code=1)
+
+        result = manager.get_skill(name)
+        if not result:
+            console.print(f"[yellow]Skill not found in registries:[/yellow] {name}")
+            return
+
+        _, metadata = result
+        latest = metadata.latest_version
+
+        if not latest or latest == installed.version:
+            console.print(f"[green]{name} is up to date[/green] ({installed.version})")
+            return
+
+        console.print(f"[bold]Update available:[/bold] {name}")
+        console.print(f"  Installed: {installed.version}")
+        console.print(f"  Latest: {latest}")
+
+        if not check_only:
+            manager.install(name, latest, force=True)
+            console.print(f"[green]Updated to {latest}[/green]")
+    else:
+        # Check all for updates
+        updates = manager.check_updates()
+
+        if not updates:
+            console.print("[green]All skills are up to date.[/green]")
+            return
+
+        console.print(f"[bold]{len(updates)} update(s) available:[/bold]")
+        console.print()
+
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("Name", style="cyan")
+        table.add_column("Installed")
+        table.add_column("Latest")
+
+        for skill_name, installed_version, latest_version in updates:
+            table.add_row(skill_name, installed_version, latest_version)
+
+        console.print(table)
+
+        if check_only:
+            console.print()
+            console.print("Run [bold]skillforge update[/bold] to install updates.")
+        else:
+            console.print()
+            for skill_name, _, latest_version in updates:
+                console.print(f"[dim]Updating {skill_name}...[/dim]")
+                manager.install(skill_name, latest_version, force=True)
+                console.print(f"[green]Updated {skill_name} to {latest_version}[/green]")
 
 
 if __name__ == "__main__":
