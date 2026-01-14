@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import os
+import importlib.util
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Literal
@@ -88,15 +89,14 @@ def get_available_providers() -> list[dict]:
 
     # Check Anthropic
     if os.environ.get("ANTHROPIC_API_KEY"):
-        try:
-            import anthropic
+        if importlib.util.find_spec("anthropic") is not None:
             providers.append({
                 "name": "anthropic",
                 "available": True,
                 "models": ["claude-sonnet-4-20250514", "claude-opus-4-1-20250219"],
                 "default_model": "claude-sonnet-4-20250514",
             })
-        except ImportError:
+        else:
             providers.append({
                 "name": "anthropic",
                 "available": False,
@@ -111,15 +111,14 @@ def get_available_providers() -> list[dict]:
 
     # Check OpenAI
     if os.environ.get("OPENAI_API_KEY"):
-        try:
-            import openai
+        if importlib.util.find_spec("openai") is not None:
             providers.append({
                 "name": "openai",
                 "available": True,
                 "models": ["gpt-4o", "gpt-4-turbo"],
                 "default_model": "gpt-4o",
             })
-        except ImportError:
+        else:
             providers.append({
                 "name": "openai",
                 "available": False,
@@ -397,13 +396,6 @@ def _extract_skill_content(raw: str) -> str:
     for i, line in enumerate(lines):
         if line.strip() == "---":
             start_idx = i
-            break
-
-    # Find the second --- marker (end of frontmatter)
-    end_frontmatter = start_idx + 1
-    for i in range(start_idx + 1, len(lines)):
-        if lines[i].strip() == "---":
-            end_frontmatter = i
             break
 
     # Return from first --- to end

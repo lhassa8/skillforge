@@ -253,11 +253,11 @@ def show(
     # Show structure
     console.print()
     console.print("[bold]Files:[/bold]")
-    console.print(f"  SKILL.md")
+    console.print("  SKILL.md")
     for f in skill.additional_files:
         console.print(f"  {f}")
     if skill.scripts:
-        console.print(f"  scripts/")
+        console.print("  scripts/")
         for s in skill.scripts:
             console.print(f"    {s}")
 
@@ -382,8 +382,8 @@ def init(
     console.print()
     console.print("[bold]Getting started:[/bold]")
     console.print(f"  1. Explore the sample: [cyan]skillforge show {skills_dir}/example-skill[/cyan]")
-    console.print(f"  2. Create a new skill: [cyan]skillforge new my-skill[/cyan]")
-    console.print(f"  3. Read the docs: [cyan]https://docs.anthropic.com/en/docs/agents-and-tools/agent-skills[/cyan]")
+    console.print("  2. Create a new skill: [cyan]skillforge new my-skill[/cyan]")
+    console.print("  3. Read the docs: [cyan]https://docs.anthropic.com/en/docs/agents-and-tools/agent-skills[/cyan]")
 
 
 @app.command("list")
@@ -743,7 +743,7 @@ def improve(
     if dry_run:
         console.print()
         console.print("[yellow]Dry run - changes not saved[/yellow]")
-        console.print(f"[dim]Remove --dry-run to save changes[/dim]")
+        console.print("[dim]Remove --dry-run to save changes[/dim]")
     else:
         # Save the improved skill
         skill_md_path = skill_path / "SKILL.md"
@@ -815,8 +815,8 @@ def providers() -> None:
         console.print("    ollama serve")
         console.print("    ollama pull llama3.2")
     else:
-        console.print(f"[green]Ready to generate skills![/green]")
-        console.print(f"[dim]Run: skillforge generate \"your skill description\"[/dim]")
+        console.print("[green]Ready to generate skills![/green]")
+        console.print("[dim]Run: skillforge generate \"your skill description\"[/dim]")
 
 
 if __name__ == "__main__":

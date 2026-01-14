@@ -8,11 +8,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Generator
 
-# Maximum bundle size before warning (10MB)
-MAX_BUNDLE_SIZE = 10 * 1024 * 1024
-
 from skillforge.skill import Skill, SkillParseError
 from skillforge.validator import validate_skill_directory, ValidationResult
+
+# Maximum bundle size before warning (10MB)
+MAX_BUNDLE_SIZE = 10 * 1024 * 1024
 
 
 @dataclass
