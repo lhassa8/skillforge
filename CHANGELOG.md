@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2025-01-14
+
+### Added
+
+- GitHub Actions CI workflow (Python 3.10-3.13 on Ubuntu and macOS)
+- Security section in README
+
+### Fixed
+
+- Path traversal protection in zip extraction
+- Symlinks excluded from bundles for security
+- API key validation before provider calls
+- Ruff and mypy linting errors
+- Programmatic usage docs now show correct types (Path objects, result classes)
+
+### Changed
+
+- Package renamed from `skillforge` to `ai-skillforge` on PyPI
+- Use `importlib.util.find_spec` for package detection instead of try/import
+
 ## [0.2.0] - 2025-01-13
 
 ### Changed

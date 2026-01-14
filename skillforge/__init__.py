@@ -1,6 +1,6 @@
 """SkillForge - Create, validate, and bundle Anthropic Agent Skills."""
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 from skillforge.skill import (
     Skill,
