@@ -381,37 +381,44 @@ def get_user(id: int):
 Use SkillForge as a Python library:
 
 ```python
+from pathlib import Path
 from skillforge import (
     generate_skill,
     improve_skill,
     validate_skill_directory,
     bundle_skill,
-    Skill,
+    GenerationResult,
+    ValidationResult,
+    BundleResult,
 )
 
-# Generate a skill
-result = generate_skill(
+# Generate a skill (returns GenerationResult)
+result: GenerationResult = generate_skill(
     description="Help users write SQL queries",
-    name="sql-helper",
-    provider="anthropic",
+    name="sql-helper",          # Optional: overrides AI-generated name
+    context_dir=Path("./src"),  # Optional: analyze project for context
+    provider="anthropic",       # Optional: anthropic, openai, ollama
 )
 
 if result.success:
     print(f"Generated: {result.skill.name}")
     print(result.raw_content)
 
-# Validate a skill directory
-validation = validate_skill_directory("./skills/sql-helper")
+# Validate a skill directory (requires Path, returns ValidationResult)
+skill_path = Path("./skills/sql-helper")
+validation: ValidationResult = validate_skill_directory(skill_path)
 if validation.valid:
     print("Skill is valid!")
 else:
     for error in validation.errors:
         print(f"Error: {error}")
 
-# Bundle for deployment
-bundle_result = bundle_skill("./skills/sql-helper")
+# Bundle for deployment (requires Path, returns BundleResult)
+bundle_result: BundleResult = bundle_skill(skill_path)
 print(f"Bundle created: {bundle_result.output_path}")
 ```
+
+> **Note:** `validate_skill_directory()` and `bundle_skill()` require `Path` objects, not strings.
 
 ---
 
