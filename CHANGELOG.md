@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2025-01-13
+
+### Changed
+
+- **Complete Architecture Rebuild** - SkillForge is now focused on creating [Anthropic Agent Skills](https://docs.anthropic.com/en/docs/agents-and-tools/agent-skills), custom instructions that extend Claude's capabilities
+
+### Added
+
+- **SKILL.md Format Support**
+  - YAML frontmatter with `name` and `description` fields
+  - Validation against Anthropic requirements (name length, reserved words, etc.)
+  - Support for additional markdown reference files
+  - Support for executable scripts directory
+
+- **New CLI Commands**
+  - `skillforge new` - Create a new skill with SKILL.md scaffold
+  - `skillforge validate` - Validate skill against Anthropic requirements
+  - `skillforge bundle` - Package skill as zip for upload to claude.ai or API
+  - `skillforge show` - Display skill details
+  - `skillforge preview` - Preview how Claude will see the skill
+  - `skillforge list` - List all skills in a directory
+  - `skillforge init` - Initialize a directory for skill development
+  - `skillforge add` - Add reference documents or scripts to a skill
+  - `skillforge doctor` - Check environment for skill development
+
+- **Core Modules**
+  - `skill.py` - Skill model, SKILL.md parsing/generation
+  - `validator.py` - Validation against Anthropic requirements
+  - `bundler.py` - Zip packaging for upload
+  - `scaffold.py` - SKILL.md scaffold generation
+
+- **Programmatic API**
+  - `Skill` class for working with skills programmatically
+  - `validate_skill_directory()` and `validate_skill_md()` functions
+  - `bundle_skill()` and `extract_skill()` functions
+  - `create_skill_scaffold()`, `add_reference_doc()`, `add_script()` functions
+
+### Removed
+
+- Task automation framework (replaced with Anthropic Skills focus)
+  - Sandbox execution system
+  - Fixture-based testing
+  - Cassette recording/replay
+  - AI-powered skill generation
+  - Skill registry system
+  - Secret management
+  - GitHub Actions import
+  - Terminal session recording
+  - Step types (shell, python, file.template, etc.)
+  - Check types (exit_code, file_exists, etc.)
+
+### Dependencies
+
+- typer >= 0.9.0
+- rich >= 13.0.0
+- pyyaml >= 6.0
+
 ## [0.1.0] - 2024-01-15
 
 ### Added
@@ -85,5 +142,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `[vault]` - hvac for HashiCorp Vault
 - `[all]` - All optional dependencies
 
-[Unreleased]: https://github.com/lhassa8/skillforge/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/lhassa8/skillforge/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/lhassa8/skillforge/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/lhassa8/skillforge/releases/tag/v0.1.0
