@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "skillforge"
+name = "ai-skillforge"
 version = "0.2.0"
 description = "Create, validate, and bundle Anthropic Agent Skills — custom instructions that extend Claude's capabilities"
 readme = "README.md"

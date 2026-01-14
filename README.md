@@ -41,13 +41,13 @@ SkillForge handles the entire skill development lifecycle: **generate → valida
 ### Basic Installation
 
 ```bash
-pip install skillforge
+pip install ai-skillforge
 ```
 
 ### With AI Generation (Recommended)
 
 ```bash
-pip install skillforge[ai]
+pip install ai-skillforge[ai]
 ```
 
 This includes the Anthropic and OpenAI SDKs for AI-powered skill generation.
@@ -436,7 +436,7 @@ ollama serve
 ### "anthropic package not installed"
 
 ```bash
-pip install skillforge[ai]
+pip install ai-skillforge[ai]
 # or
 pip install anthropic
 ```
