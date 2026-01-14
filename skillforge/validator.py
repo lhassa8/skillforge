@@ -11,6 +11,9 @@ from skillforge.skill import (
     SkillParseError,
     MAX_NAME_LENGTH,
     MAX_DESCRIPTION_LENGTH,
+    NAME_PATTERN,
+    RESERVED_WORDS,
+    XML_TAG_PATTERN,
 )
 
 
@@ -23,6 +26,11 @@ class ValidationMessage:
     location: Optional[str] = None
 
     def __str__(self) -> str:
+        """Format the validation message for display.
+
+        Returns:
+            Formatted string like "[ERROR] location: message" or "[WARNING] message"
+        """
         if self.location:
             return f"[{self.level.upper()}] {self.location}: {self.message}"
         return f"[{self.level.upper()}] {self.message}"
@@ -232,9 +240,6 @@ def validate_name(name: str) -> list[str]:
     if len(name) > MAX_NAME_LENGTH:
         errors.append(f"Name exceeds {MAX_NAME_LENGTH} characters")
 
-    import re
-    from skillforge.skill import NAME_PATTERN, RESERVED_WORDS, XML_TAG_PATTERN
-
     if not NAME_PATTERN.match(name):
         errors.append("Name must contain only lowercase letters, numbers, and hyphens")
 
@@ -265,7 +270,6 @@ def validate_description(description: str) -> list[str]:
     if len(description) > MAX_DESCRIPTION_LENGTH:
         errors.append(f"Description exceeds {MAX_DESCRIPTION_LENGTH} characters")
 
-    from skillforge.skill import XML_TAG_PATTERN
     if XML_TAG_PATTERN.search(description):
         errors.append("Description cannot contain XML tags")
 

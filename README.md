@@ -452,6 +452,37 @@ pip install anthropic
 
 ---
 
+## Security
+
+### API Keys
+
+- Store API keys in environment variables, not in code or skill files
+- Never commit `.env` files or API keys to version control
+- Use separate API keys for development and production
+
+```bash
+# Set API key for current session only
+export ANTHROPIC_API_KEY=your-key
+
+# Or use a .env file (add to .gitignore)
+echo "ANTHROPIC_API_KEY=your-key" >> .env
+```
+
+### Skill Content
+
+- **Review generated skills** before deploying — AI-generated content should be verified
+- **Never include secrets** in SKILL.md files (passwords, tokens, internal URLs)
+- **Scripts are user-provided** — SkillForge does not execute scripts, but review them before use
+- Skills uploaded to Claude have access to your conversations
+
+### Bundle Security
+
+- SkillForge validates zip files to prevent path traversal attacks
+- Symlinks are excluded from bundles for security
+- Maximum recommended bundle size: 10MB
+
+---
+
 ## Development
 
 ### Setup

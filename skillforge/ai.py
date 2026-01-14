@@ -136,7 +136,7 @@ def get_available_providers() -> list[dict]:
     try:
         import urllib.request
         req = urllib.request.Request("http://localhost:11434/api/tags", method="GET")
-        with urllib.request.urlopen(req, timeout=2) as resp:
+        with urllib.request.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read())
             models = [m["name"] for m in data.get("models", [])]
             providers.append({
@@ -411,10 +411,22 @@ def _extract_skill_content(raw: str) -> str:
 
 
 def _call_anthropic(prompt: str, model: str) -> str:
-    """Call Anthropic API."""
+    """Call Anthropic API.
+
+    Raises:
+        ValueError: If ANTHROPIC_API_KEY is not set
+        anthropic.APIError: If the API call fails
+    """
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise ValueError(
+            "ANTHROPIC_API_KEY environment variable not set. "
+            "Run: export ANTHROPIC_API_KEY=your-key"
+        )
+
     import anthropic
 
-    client = anthropic.Anthropic()
+    client = anthropic.Anthropic(api_key=api_key)
     message = client.messages.create(
         model=model,
         max_tokens=4096,
@@ -428,10 +440,22 @@ def _call_anthropic(prompt: str, model: str) -> str:
 
 
 def _call_openai(prompt: str, model: str) -> str:
-    """Call OpenAI API."""
+    """Call OpenAI API.
+
+    Raises:
+        ValueError: If OPENAI_API_KEY is not set
+        openai.APIError: If the API call fails
+    """
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError(
+            "OPENAI_API_KEY environment variable not set. "
+            "Run: export OPENAI_API_KEY=your-key"
+        )
+
     import openai
 
-    client = openai.OpenAI()
+    client = openai.OpenAI(api_key=api_key)
     response = client.chat.completions.create(
         model=model,
         max_tokens=4096,

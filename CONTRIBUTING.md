@@ -37,10 +37,10 @@ pytest tests/ -v
 pytest tests/ --cov=skillforge --cov-report=html
 
 # Run specific test file
-pytest tests/test_runner.py -v
+pytest tests/test_skill.py -v
 
 # Run tests matching a pattern
-pytest tests/ -k "test_secret" -v
+pytest tests/ -k "test_validate" -v
 ```
 
 ### Code Quality
@@ -68,7 +68,7 @@ ruff format --check skillforge/
    - Steps to reproduce
    - Expected vs actual behavior
    - Python version and OS
-   - Relevant skill.yaml if applicable
+   - Relevant SKILL.md if applicable
 
 ### Suggesting Features
 
@@ -103,20 +103,21 @@ ruff format --check skillforge/
 ```
 skillforge/
 ├── skillforge/           # Main package
+│   ├── __init__.py      # Package exports
 │   ├── cli.py           # CLI entry point (Typer)
-│   ├── runner.py        # Skill execution engine
-│   ├── executor.py      # Step execution
-│   ├── loader.py        # YAML loading
-│   ├── placeholders.py  # Placeholder substitution
-│   ├── sandbox.py       # Sandbox management
-│   ├── checks.py        # Validation checks
-│   ├── secrets.py       # Secret management
-│   ├── registry.py      # Skill registry
-│   ├── ai_generator.py  # AI skill generation
-│   └── ...
+│   ├── skill.py         # Skill model and parsing
+│   ├── validator.py     # Validation logic
+│   ├── bundler.py       # Zip bundling/extraction
+│   ├── scaffold.py      # Skill scaffolding
+│   └── ai.py            # AI-powered generation
 ├── tests/               # Test suite
-├── examples/            # Example skills
-└── docs/               # Documentation
+│   ├── test_skill.py    # Skill model tests
+│   ├── test_validator.py # Validation tests
+│   ├── test_bundler.py  # Bundling tests
+│   ├── test_scaffold.py # Scaffold tests
+│   ├── test_cli.py      # CLI integration tests
+│   └── test_ai.py       # AI generation tests
+└── skills/              # Generated skills directory
 ```
 
 ## Testing Guidelines

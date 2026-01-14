@@ -6,7 +6,10 @@ import zipfile
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Generator
+
+# Maximum bundle size before warning (10MB)
+MAX_BUNDLE_SIZE = 10 * 1024 * 1024
 
 from skillforge.skill import Skill, SkillParseError
 from skillforge.validator import validate_skill_directory, ValidationResult
@@ -98,7 +101,9 @@ def bundle_skill(
     return result
 
 
-def _iter_skill_files(skill_dir: Path, include_hidden: bool = False):
+def _iter_skill_files(
+    skill_dir: Path, include_hidden: bool = False
+) -> Generator[Path, None, None]:
     """Iterate over all files in a skill directory.
 
     Args:
@@ -107,9 +112,24 @@ def _iter_skill_files(skill_dir: Path, include_hidden: bool = False):
 
     Yields:
         Path objects for each file
+
+    Note:
+        Symlinks are skipped for security (prevent escaping skill_dir).
     """
+    resolved_skill_dir = skill_dir.resolve()
+
     for item in skill_dir.rglob("*"):
         if not item.is_file():
+            continue
+
+        # Skip symlinks for security
+        if item.is_symlink():
+            continue
+
+        # Verify file is within skill directory (prevent traversal)
+        try:
+            item.resolve().relative_to(resolved_skill_dir)
+        except ValueError:
             continue
 
         # Skip hidden files unless requested
@@ -189,9 +209,13 @@ def extract_skill(
                 continue
 
             # Security check - prevent path traversal
+            # Check for ".." components that could escape the directory
+            if ".." in rel_name.split("/"):
+                raise ValueError(f"Path traversal detected in zip: {name}")
+
             dest_path = skill_dir / rel_name
             try:
-                dest_path.relative_to(skill_dir)
+                dest_path.resolve().relative_to(skill_dir.resolve())
             except ValueError:
                 raise ValueError(f"Invalid path in zip: {name}")
 
