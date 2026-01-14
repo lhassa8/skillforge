@@ -524,5 +524,300 @@ def preview(
     console.print(syntax)
 
 
+@app.command()
+def generate(
+    description: str = typer.Argument(..., help="Description of what the skill should do"),
+    name: Optional[str] = typer.Option(
+        None,
+        "--name",
+        "-n",
+        help="Name for the skill (auto-generated if not provided)",
+    ),
+    output_dir: Path = typer.Option(
+        DEFAULT_SKILLS_DIR,
+        "--out",
+        "-o",
+        help="Output directory for the skill",
+    ),
+    context: Optional[Path] = typer.Option(
+        None,
+        "--context",
+        "-c",
+        help="Directory to analyze for project context",
+    ),
+    provider: Optional[str] = typer.Option(
+        None,
+        "--provider",
+        "-p",
+        help="AI provider (anthropic, openai, ollama)",
+    ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="Specific model to use",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help="Overwrite existing skill",
+    ),
+) -> None:
+    """Generate a skill using AI.
+
+    Creates a complete, high-quality SKILL.md from a natural language
+    description. Requires an AI provider (Anthropic, OpenAI, or Ollama).
+
+    Example:
+
+    \b
+        skillforge generate "Help users write clear git commit messages"
+        skillforge generate "Review Python code for best practices" --name code-reviewer
+        skillforge generate "Analyze CSV files" --context ./my-project --provider anthropic
+    """
+    from skillforge.ai import generate_skill, get_default_provider
+    from skillforge.skill import normalize_skill_name
+
+    console.print()
+    console.print("[bold]Generating skill with AI...[/bold]")
+    console.print(f"[dim]Description: {description[:80]}{'...' if len(description) > 80 else ''}[/dim]")
+
+    # Check provider availability
+    if provider is None:
+        default = get_default_provider()
+        if default:
+            provider, model = default[0], model or default[1]
+            console.print(f"[dim]Using provider: {provider} ({model})[/dim]")
+        else:
+            console.print("[red]Error:[/red] No AI provider available.")
+            console.print()
+            console.print("[bold]Setup options:[/bold]")
+            console.print("  • Anthropic: [cyan]export ANTHROPIC_API_KEY=your-key[/cyan]")
+            console.print("  • OpenAI: [cyan]export OPENAI_API_KEY=your-key[/cyan]")
+            console.print("  • Ollama: [cyan]ollama serve[/cyan]")
+            console.print()
+            console.print("Run [cyan]skillforge providers[/cyan] to check status.")
+            raise typer.Exit(code=1)
+    else:
+        console.print(f"[dim]Using provider: {provider}{f' ({model})' if model else ''}[/dim]")
+
+    if context:
+        console.print(f"[dim]Analyzing context: {context}[/dim]")
+
+    console.print()
+
+    with console.status("[bold green]Generating skill..."):
+        result = generate_skill(
+            description=description,
+            name=name,
+            context_dir=context,
+            provider=provider,
+            model=model,
+        )
+
+    if not result.success:
+        console.print(f"[red]Error:[/red] {result.error}")
+        if result.raw_content:
+            console.print()
+            console.print("[dim]Raw response (for debugging):[/dim]")
+            console.print(result.raw_content[:500])
+        raise typer.Exit(code=1)
+
+    # Save the skill
+    skill = result.skill
+    skill_name = skill.name if skill else normalize_skill_name(name or "generated-skill")
+    skill_dir = output_dir / skill_name
+
+    if skill_dir.exists() and not force:
+        console.print(f"[red]Error:[/red] Skill already exists: {skill_dir}")
+        console.print("[dim]Use --force to overwrite[/dim]")
+        raise typer.Exit(code=1)
+
+    skill_dir.mkdir(parents=True, exist_ok=True)
+    skill_md_path = skill_dir / "SKILL.md"
+    skill_md_path.write_text(result.raw_content)
+
+    console.print(f"[green]✓ Generated skill:[/green] {skill_dir}")
+    console.print(f"  Provider: {result.provider} ({result.model})")
+    console.print()
+
+    # Show preview
+    console.print("[bold]Generated SKILL.md:[/bold]")
+    syntax = Syntax(
+        result.raw_content[:1500] + ("..." if len(result.raw_content) > 1500 else ""),
+        "markdown",
+        theme="monokai",
+        line_numbers=True,
+    )
+    console.print(syntax)
+
+    console.print()
+    console.print("[bold]Next steps:[/bold]")
+    console.print(f"  1. Review and edit: [cyan]{skill_md_path}[/cyan]")
+    console.print(f"  2. Validate: [cyan]skillforge validate {skill_dir}[/cyan]")
+    console.print(f"  3. Bundle: [cyan]skillforge bundle {skill_dir}[/cyan]")
+
+
+@app.command()
+def improve(
+    skill_path: Path = typer.Argument(..., help="Path to the skill directory"),
+    request: str = typer.Argument(..., help="What to improve about the skill"),
+    provider: Optional[str] = typer.Option(
+        None,
+        "--provider",
+        "-p",
+        help="AI provider (anthropic, openai, ollama)",
+    ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="Specific model to use",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Show changes without saving",
+    ),
+) -> None:
+    """Improve an existing skill using AI.
+
+    Uses AI to enhance the skill based on your request. Can add examples,
+    improve instructions, handle edge cases, or refactor the content.
+
+    Example:
+
+    \b
+        skillforge improve ./skills/my-skill "Add more examples"
+        skillforge improve ./skills/my-skill "Make instructions clearer and more specific"
+        skillforge improve ./skills/my-skill "Add error handling guidance" --dry-run
+    """
+    from skillforge.ai import improve_skill, get_default_provider
+
+    skill_path = Path(skill_path)
+
+    if not skill_path.exists():
+        console.print(f"[red]Error:[/red] Skill not found: {skill_path}")
+        raise typer.Exit(code=1)
+
+    console.print()
+    console.print("[bold]Improving skill with AI...[/bold]")
+    console.print(f"[dim]Request: {request[:80]}{'...' if len(request) > 80 else ''}[/dim]")
+
+    # Check provider availability
+    if provider is None:
+        default = get_default_provider()
+        if default:
+            provider, model = default[0], model or default[1]
+            console.print(f"[dim]Using provider: {provider} ({model})[/dim]")
+        else:
+            console.print("[red]Error:[/red] No AI provider available.")
+            console.print("Run [cyan]skillforge providers[/cyan] to check status.")
+            raise typer.Exit(code=1)
+
+    console.print()
+
+    with console.status("[bold green]Improving skill..."):
+        result = improve_skill(
+            skill_path=skill_path,
+            request=request,
+            provider=provider,
+            model=model,
+        )
+
+    if not result.success:
+        console.print(f"[red]Error:[/red] {result.error}")
+        raise typer.Exit(code=1)
+
+    # Show the improved content
+    console.print("[bold]Improved SKILL.md:[/bold]")
+    syntax = Syntax(
+        result.raw_content[:2000] + ("..." if len(result.raw_content) > 2000 else ""),
+        "markdown",
+        theme="monokai",
+        line_numbers=True,
+    )
+    console.print(syntax)
+
+    if dry_run:
+        console.print()
+        console.print("[yellow]Dry run - changes not saved[/yellow]")
+        console.print(f"[dim]Remove --dry-run to save changes[/dim]")
+    else:
+        # Save the improved skill
+        skill_md_path = skill_path / "SKILL.md"
+        skill_md_path.write_text(result.raw_content)
+
+        console.print()
+        console.print(f"[green]✓ Skill improved and saved:[/green] {skill_md_path}")
+
+
+@app.command()
+def providers() -> None:
+    """Show available AI providers.
+
+    Checks which AI providers are configured and ready to use
+    for skill generation.
+
+    Example:
+
+    \b
+        skillforge providers
+    """
+    from skillforge.ai import get_available_providers
+
+    console.print()
+    console.print("[bold]AI Providers[/bold]")
+    console.print()
+
+    providers_list = get_available_providers()
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Provider")
+    table.add_column("Status")
+    table.add_column("Models / Info")
+
+    for p in providers_list:
+        name = p["name"]
+        if p.get("available"):
+            status = "[green]✓ Available[/green]"
+            models = ", ".join(p.get("models", [])[:3])
+            if len(p.get("models", [])) > 3:
+                models += ", ..."
+            info = f"[dim]{models}[/dim]"
+        else:
+            status = "[red]✗ Not available[/red]"
+            info = f"[dim]{p.get('reason', 'Unknown')}[/dim]"
+
+        table.add_row(name.title(), status, info)
+
+    console.print(table)
+    console.print()
+
+    # Show setup instructions if none available
+    available = [p for p in providers_list if p.get("available")]
+    if not available:
+        console.print("[yellow]No providers available.[/yellow]")
+        console.print()
+        console.print("[bold]Setup options:[/bold]")
+        console.print()
+        console.print("  [bold]Anthropic (Recommended):[/bold]")
+        console.print("    pip install anthropic")
+        console.print("    export ANTHROPIC_API_KEY=your-key")
+        console.print()
+        console.print("  [bold]OpenAI:[/bold]")
+        console.print("    pip install openai")
+        console.print("    export OPENAI_API_KEY=your-key")
+        console.print()
+        console.print("  [bold]Ollama (Local, Free):[/bold]")
+        console.print("    brew install ollama")
+        console.print("    ollama serve")
+        console.print("    ollama pull llama3.2")
+    else:
+        console.print(f"[green]Ready to generate skills![/green]")
+        console.print(f"[dim]Run: skillforge generate \"your skill description\"[/dim]")
+
+
 if __name__ == "__main__":
     app()

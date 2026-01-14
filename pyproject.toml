@@ -55,6 +55,16 @@ Issues = "https://github.com/lhassa8/skillforge/issues"
 Changelog = "https://github.com/lhassa8/skillforge/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
+ai = [
+    "anthropic>=0.18.0",
+    "openai>=1.0.0",
+]
+anthropic = [
+    "anthropic>=0.18.0",
+]
+openai = [
+    "openai>=1.0.0",
+]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",

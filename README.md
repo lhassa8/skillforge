@@ -7,114 +7,120 @@
 
 **SkillForge** is a CLI tool for creating, validating, and bundling [Anthropic Agent Skills](https://docs.anthropic.com/en/docs/agents-and-tools/agent-skills) — custom instructions that extend Claude's capabilities for specific tasks.
 
-## What are Anthropic Agent Skills?
+## Features
 
-Agent Skills are custom capabilities you can add to Claude. Each skill provides instructions that Claude follows when triggered, allowing you to:
-
-- Define specialized workflows for Claude to execute
-- Include reference documentation Claude can access
-- Bundle executable scripts Claude can run
-- Share reusable capabilities across projects
+- **AI-Powered Generation** — Generate complete, high-quality skills from natural language descriptions
+- **Validation** — Check skills against Anthropic's requirements before upload
+- **Bundling** — Package skills as zip files ready for claude.ai or API upload
+- **Skill Improvement** — Use AI to enhance existing skills with better examples and instructions
 
 ## Installation
 
 ```bash
 pip install skillforge
+
+# For AI-powered generation (recommended)
+pip install skillforge[ai]
 ```
 
 Verify your setup:
 
 ```bash
 skillforge doctor
+skillforge providers  # Check AI provider status
 ```
 
 ## Quick Start
 
-### 1. Create a New Skill
+### Generate a Skill with AI
+
+The fastest way to create a skill:
 
 ```bash
-skillforge new pdf-extractor -d "Extract text and tables from PDF files. Use when the user asks to analyze a PDF document."
+# Set your API key
+export ANTHROPIC_API_KEY=your-key
+
+# Generate a complete skill from a description
+skillforge generate "Help users write clear, conventional git commit messages"
 ```
 
-This creates:
-```
-skills/pdf-extractor/
-└── SKILL.md          # Skill definition with YAML frontmatter
-```
+This creates a complete, ready-to-use skill with instructions and examples.
 
-### 2. Edit the Skill
-
-Edit `skills/pdf-extractor/SKILL.md`:
-
-```markdown
----
-name: pdf-extractor
-description: Extract text and tables from PDF files. Use when the user asks to analyze a PDF document.
----
-
-# PDF Extractor
-
-## Instructions
-
-When the user provides a PDF file or asks about PDF content:
-
-1. Use the `pdftotext` command to extract text content
-2. For tables, use `tabula-py` or similar tools
-3. Present the extracted content in a clear, formatted way
-
-## Examples
-
-### Example 1: Extract all text
-
-**User request:** "Extract the text from report.pdf"
-
-**What to do:**
-1. Run `pdftotext report.pdf -`
-2. Format and present the extracted text
-
-### Example 2: Extract tables
-
-**User request:** "Get the data table from page 3 of spreadsheet.pdf"
-
-**What to do:**
-1. Use tabula to extract tables from page 3
-2. Format as markdown table or CSV
-```
-
-### 3. Validate the Skill
+### Or Create Manually
 
 ```bash
-skillforge validate skills/pdf-extractor
+# Create a skill scaffold
+skillforge new commit-helper -d "Help write git commit messages. Use when the user asks for help with commits."
+
+# Edit the generated SKILL.md with your instructions
+# Then validate and bundle
+skillforge validate ./skills/commit-helper
+skillforge bundle ./skills/commit-helper
 ```
 
-### 4. Bundle for Upload
+## AI-Powered Commands
+
+### `skillforge generate`
+
+Generate a complete skill using AI.
 
 ```bash
-skillforge bundle skills/pdf-extractor
+# Basic generation
+skillforge generate "Review Python code for best practices and security issues"
+
+# With a custom name
+skillforge generate "Analyze CSV data files" --name csv-analyzer
+
+# With project context (AI analyzes your codebase)
+skillforge generate "Help with this project's API" --context ./my-project
+
+# Specify provider and model
+skillforge generate "Debug JavaScript errors" --provider anthropic --model claude-sonnet-4-20250514
 ```
 
-This creates a zip file you can upload to:
-- **claude.ai**: Settings → Features → Upload Skill
-- **API**: POST /v1/skills with the zip file
+### `skillforge improve`
 
-## Commands
+Enhance an existing skill using AI.
+
+```bash
+# Add more examples
+skillforge improve ./skills/my-skill "Add 3 more detailed examples"
+
+# Make instructions clearer
+skillforge improve ./skills/my-skill "Make the instructions more specific and actionable"
+
+# Add error handling
+skillforge improve ./skills/my-skill "Add guidance for edge cases and error scenarios"
+
+# Preview changes without saving
+skillforge improve ./skills/my-skill "Restructure for clarity" --dry-run
+```
+
+### `skillforge providers`
+
+Check which AI providers are available.
+
+```bash
+skillforge providers
+```
+
+**Supported Providers:**
+
+| Provider | Setup | Models |
+|----------|-------|--------|
+| Anthropic | `export ANTHROPIC_API_KEY=...` | claude-sonnet-4-20250514, claude-opus-4-1-20250219 |
+| OpenAI | `export OPENAI_API_KEY=...` | gpt-4o, gpt-4-turbo |
+| Ollama | `ollama serve` | llama3.2, codellama, etc. |
+
+## Other Commands
 
 ### `skillforge new`
 
 Create a new skill scaffold.
 
 ```bash
-# Basic skill
-skillforge new my-skill
-
-# With description
 skillforge new my-skill -d "Description of what the skill does"
-
-# With scripts directory
-skillforge new my-skill --with-scripts
-
-# Custom output directory
-skillforge new my-skill --out ./custom/path
+skillforge new my-skill --with-scripts  # Include scripts directory
 ```
 
 ### `skillforge validate`
@@ -122,11 +128,8 @@ skillforge new my-skill --out ./custom/path
 Validate a skill against Anthropic requirements.
 
 ```bash
-# Basic validation
 skillforge validate ./skills/my-skill
-
-# Strict mode (warnings become errors)
-skillforge validate ./skills/my-skill --strict
+skillforge validate ./skills/my-skill --strict  # Warnings become errors
 ```
 
 ### `skillforge bundle`
@@ -134,29 +137,16 @@ skillforge validate ./skills/my-skill --strict
 Bundle a skill into a zip file for upload.
 
 ```bash
-# Bundle with auto-generated filename
 skillforge bundle ./skills/my-skill
-
-# Custom output path
 skillforge bundle ./skills/my-skill -o my-skill.zip
-
-# Skip validation (not recommended)
-skillforge bundle ./skills/my-skill --no-validate
 ```
 
-### `skillforge show`
+### `skillforge show` / `skillforge preview`
 
-Display skill details.
+Display skill details or preview how Claude sees it.
 
 ```bash
 skillforge show ./skills/my-skill
-```
-
-### `skillforge preview`
-
-Preview how Claude will see the skill.
-
-```bash
 skillforge preview ./skills/my-skill
 ```
 
@@ -168,35 +158,13 @@ List all skills in a directory.
 skillforge list ./skills
 ```
 
-### `skillforge init`
-
-Initialize a directory for skill development.
-
-```bash
-skillforge init
-```
-
 ### `skillforge add`
 
 Add reference documents or scripts to a skill.
 
 ```bash
-# Add a reference document
 skillforge add ./skills/my-skill doc REFERENCE
-
-# Add a Python script
-skillforge add ./skills/my-skill script helper
-
-# Add a Bash script
-skillforge add ./skills/my-skill script build --language bash
-```
-
-### `skillforge doctor`
-
-Check your environment.
-
-```bash
-skillforge doctor
+skillforge add ./skills/my-skill script helper --language python
 ```
 
 ## SKILL.md Format
@@ -211,7 +179,7 @@ description: Brief description. Explain when Claude should use this skill.
 
 # Skill Title
 
-Your skill instructions go here. This content is loaded when the skill is triggered.
+Your skill instructions go here.
 
 ## Instructions
 
@@ -219,75 +187,40 @@ Clear, step-by-step guidance for Claude.
 
 ## Examples
 
-Show Claude how to handle common scenarios.
+### Example 1: [Scenario]
+
+**User request:** "..."
+
+**What to do:**
+1. Step one
+2. Step two
 ```
 
 ### Frontmatter Requirements
 
 | Field | Requirements |
 |-------|-------------|
-| `name` | Required. Max 64 chars. Lowercase letters, numbers, hyphens only. Cannot contain "anthropic" or "claude". |
-| `description` | Required. Max 1024 chars. Should explain when to use the skill. Cannot contain XML tags. |
-
-### Best Practices
-
-1. **Clear trigger conditions**: Use phrases like "Use when..." in the description
-2. **Step-by-step instructions**: Be specific about what Claude should do
-3. **Include examples**: Show common request/response patterns
-4. **Reference additional files**: Link to `REFERENCE.md` or scripts when needed
+| `name` | Max 64 chars. Lowercase letters, numbers, hyphens only. Cannot contain "anthropic" or "claude". |
+| `description` | Max 1024 chars. Should explain when to use the skill. Cannot contain XML tags. |
 
 ## Skill Structure
-
-A skill can include multiple files:
 
 ```
 my-skill/
 ├── SKILL.md           # Required: Main skill definition
 ├── REFERENCE.md       # Optional: Additional documentation
-├── API.md             # Optional: API documentation
 └── scripts/           # Optional: Executable scripts
-    ├── helper.py      # Claude can run these
-    └── build.sh
+    └── helper.py
 ```
-
-### Additional Markdown Files
-
-Create extra `.md` files for detailed reference documentation that Claude can access when needed:
-
-```bash
-skillforge add ./skills/my-skill doc API-REFERENCE
-```
-
-### Scripts Directory
-
-Add executable scripts that Claude can run:
-
-```bash
-skillforge add ./skills/my-skill script analyze --language python
-```
-
-Scripts are executed when Claude needs them — the script code itself is not loaded into context, only the output.
 
 ## Development
 
 ```bash
-# Clone the repository
 git clone https://github.com/lhassa8/skillforge.git
 cd skillforge
-
-# Install in development mode
 pip install -e ".[dev]"
-
-# Run tests
 pytest tests/ -v
-
-# Run with coverage
-pytest tests/ --cov=skillforge
 ```
-
-## Contributing
-
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 

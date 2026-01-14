@@ -24,6 +24,12 @@ from skillforge.scaffold import (
     add_reference_doc,
     add_script,
 )
+from skillforge.ai import (
+    generate_skill,
+    improve_skill,
+    get_available_providers,
+    GenerationResult,
+)
 
 __all__ = [
     # Version
@@ -46,4 +52,9 @@ __all__ = [
     "create_skill_scaffold",
     "add_reference_doc",
     "add_script",
+    # AI Generation
+    "generate_skill",
+    "improve_skill",
+    "get_available_providers",
+    "GenerationResult",
 ]
