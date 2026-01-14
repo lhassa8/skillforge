@@ -428,7 +428,7 @@ def _call_anthropic(prompt: str, model: str) -> str:
         ],
     )
 
-    return message.content[0].text
+    return message.content[0].text  # type: ignore[union-attr]
 
 
 def _call_openai(prompt: str, model: str) -> str:

@@ -314,7 +314,7 @@ def doctor() -> None:
         if shutil.which(tool):
             checks.append((f"Tool: {tool}", True, desc))
         else:
-            checks.append((f"Tool: {tool}", None, f"not found ({desc})"))
+            checks.append((f"Tool: {tool}", False, f"not found ({desc})"))
 
     # Display results
     table = Table(show_header=False, box=None)
@@ -636,16 +636,18 @@ def generate(
 
     skill_dir.mkdir(parents=True, exist_ok=True)
     skill_md_path = skill_dir / "SKILL.md"
+    assert result.raw_content is not None  # Guaranteed by success check
     skill_md_path.write_text(result.raw_content)
 
     console.print(f"[green]✓ Generated skill:[/green] {skill_dir}")
     console.print(f"  Provider: {result.provider} ({result.model})")
     console.print()
 
-    # Show preview
+    # Show preview (raw_content guaranteed by assertion above)
     console.print("[bold]Generated SKILL.md:[/bold]")
+    content = result.raw_content
     syntax = Syntax(
-        result.raw_content[:1500] + ("..." if len(result.raw_content) > 1500 else ""),
+        content[:1500] + ("..." if len(content) > 1500 else ""),
         "markdown",
         theme="monokai",
         line_numbers=True,
@@ -730,10 +732,13 @@ def improve(
         console.print(f"[red]Error:[/red] {result.error}")
         raise typer.Exit(code=1)
 
+    assert result.raw_content is not None  # Guaranteed by success check
+
     # Show the improved content
     console.print("[bold]Improved SKILL.md:[/bold]")
+    content = result.raw_content
     syntax = Syntax(
-        result.raw_content[:2000] + ("..." if len(result.raw_content) > 2000 else ""),
+        content[:2000] + ("..." if len(content) > 2000 else ""),
         "markdown",
         theme="monokai",
         line_numbers=True,
@@ -747,7 +752,7 @@ def improve(
     else:
         # Save the improved skill
         skill_md_path = skill_path / "SKILL.md"
-        skill_md_path.write_text(result.raw_content)
+        skill_md_path.write_text(content)
 
         console.print()
         console.print(f"[green]✓ Skill improved and saved:[/green] {skill_md_path}")
