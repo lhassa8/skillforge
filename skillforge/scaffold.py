@@ -1,171 +1,29 @@
-"""Scaffold generator for new skills."""
+"""Scaffold generator for Anthropic Agent Skills."""
 
 from pathlib import Path
 from typing import Optional
 
-import yaml
-
-from skillforge.models import (
+from skillforge.skill import (
     Skill,
-    SkillInput,
-    Step,
-    Check,
-    InputType,
-    StepType,
-    CheckType,
+    generate_skill_content,
+    normalize_skill_name,
 )
-
-
-def generate_skill_yaml(name: str, description: str = "") -> str:
-    """Generate the skill.yaml content for a new skill."""
-    skill = Skill(
-        name=name,
-        version="0.1.0",
-        description=description or f"TODO: Describe what {name} does",
-        requirements={
-            "commands": [],  # Add required commands here
-        },
-        inputs=[
-            SkillInput(
-                name="message",
-                type=InputType.STRING,
-                description="A greeting message to display",
-                required=False,
-                default="Hello, World!",
-            ),
-        ],
-        preconditions=[
-            "Target directory exists",
-        ],
-        steps=[
-            Step(
-                id="example_step",
-                type=StepType.SHELL,
-                name="Example step",
-                command="echo '{message}'",
-                cwd="{sandbox_dir}",
-            ),
-        ],
-        checks=[
-            Check(
-                id="check_exit_code",
-                type=CheckType.EXIT_CODE,
-                step_id="example_step",
-                equals=0,
-            ),
-        ],
-    )
-
-    # Custom YAML formatting for readability
-    return yaml.dump(
-        skill.to_dict(),
-        default_flow_style=False,
-        sort_keys=False,
-        allow_unicode=True,
-        width=80,
-    )
-
-
-def generate_skill_txt(name: str, description: str = "") -> str:
-    """Generate the SKILL.txt content for a new skill."""
-    return f"""SKILL: {name}
-{'=' * (7 + len(name))}
-
-DESCRIPTION
------------
-{description or f"TODO: Describe what {name} does"}
-
-PRECONDITIONS
--------------
-- Target directory must exist
-
-INPUTS
-------
-- message: A greeting message to display (optional, default: "Hello, World!")
-
-STEPS
------
-1. Example step
-   - Run: echo '{{message}}'
-   - Working directory: sandbox_dir
-
-EXPECTED OUTCOMES
------------------
-- Example step completes successfully (exit code 0)
-
-NOTES
------
-- This is a scaffold. Customize the steps and checks as needed.
-- Use {{sandbox_dir}} for the working directory in steps.
-- Use {{target_dir}} to reference the original target path.
-"""
-
-
-def generate_checks_py(name: str) -> str:
-    """Generate the checks.py content for a new skill."""
-    return f'''"""Custom checks for the {name} skill."""
-
-from pathlib import Path
-from typing import Any
-
-
-def custom_check(context: dict[str, Any]) -> tuple[bool, str]:
-    """Example custom check function.
-
-    Args:
-        context: Dictionary containing:
-            - target_dir: Path to the target directory
-            - sandbox_dir: Path to the sandbox directory
-            - inputs: Resolved input values
-            - step_results: Results from executed steps
-
-    Returns:
-        Tuple of (success: bool, message: str)
-    """
-    # Example: Check that a file exists
-    # target_dir = Path(context["target_dir"])
-    # if (target_dir / "some_file.txt").exists():
-    #     return True, "File exists"
-    # return False, "File not found"
-
-    # Placeholder - always passes
-    return True, "Custom check passed"
-
-
-# Add more custom check functions as needed
-'''
-
-
-def generate_fixture_yaml() -> str:
-    """Generate a fixture.yaml template."""
-    return """# Fixture configuration
-# Override skill inputs for this fixture
-
-inputs:
-  message: "Hello from fixture!"
-
-# Set to true to allow files in output that aren't in expected/
-allow_extra_files: true
-"""
-
-
-def generate_gitkeep() -> str:
-    """Generate a .gitkeep file content."""
-    return ""
 
 
 def create_skill_scaffold(
     name: str,
     output_dir: Path,
     description: str = "",
+    with_scripts: bool = False,
     force: bool = False,
 ) -> Path:
-    """Create a complete skill scaffold.
+    """Create a new Anthropic Skill scaffold.
 
     Args:
-        name: Name of the skill
+        name: Name of the skill (will be normalized)
         output_dir: Parent directory for the skill folder
         description: Optional description for the skill
+        with_scripts: If True, create a scripts/ directory with example
         force: If True, overwrite existing skill folder
 
     Returns:
@@ -174,9 +32,11 @@ def create_skill_scaffold(
     Raises:
         FileExistsError: If skill directory already exists and force is False
     """
-    # Normalize skill name (replace spaces/special chars with underscores)
-    safe_name = "".join(c if c.isalnum() or c == "_" else "_" for c in name)
-    safe_name = safe_name.strip("_").lower()
+    # Normalize the skill name
+    safe_name = normalize_skill_name(name)
+
+    if not safe_name:
+        raise ValueError(f"Invalid skill name: {name}")
 
     skill_dir = output_dir / safe_name
 
@@ -186,52 +46,213 @@ def create_skill_scaffold(
     # Create directory structure
     skill_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create subdirectories
-    fixtures_dir = skill_dir / "fixtures"
-    happy_path_dir = fixtures_dir / "happy_path"
-    input_dir = happy_path_dir / "input"
-    expected_dir = happy_path_dir / "expected"
-    reports_dir = skill_dir / "reports"
-    cassettes_dir = skill_dir / "cassettes"
+    # Generate default description if not provided
+    if not description:
+        description = f"TODO: Describe what {safe_name} does and when Claude should use it."
 
-    for d in [input_dir, expected_dir, reports_dir, cassettes_dir]:
-        d.mkdir(parents=True, exist_ok=True)
+    # Generate SKILL.md content
+    content = generate_skill_content(safe_name, description)
 
-    # Generate and write files
-    files = {
-        skill_dir / "skill.yaml": generate_skill_yaml(name, description),
-        skill_dir / "SKILL.txt": generate_skill_txt(name, description),
-        skill_dir / "checks.py": generate_checks_py(name),
-        happy_path_dir / "fixture.yaml": generate_fixture_yaml(),
-        input_dir / ".gitkeep": generate_gitkeep(),
-        expected_dir / ".gitkeep": generate_gitkeep(),
-        reports_dir / ".gitkeep": generate_gitkeep(),
-        cassettes_dir / ".gitkeep": generate_gitkeep(),
-    }
+    skill = Skill(
+        name=safe_name,
+        description=description,
+        content=content,
+        path=skill_dir,
+    )
 
-    for file_path, content in files.items():
-        file_path.write_text(content)
+    # Write SKILL.md
+    skill_md_path = skill_dir / "SKILL.md"
+    skill_md_path.write_text(skill.to_skill_md())
+
+    # Create scripts directory if requested
+    if with_scripts:
+        scripts_dir = skill_dir / "scripts"
+        scripts_dir.mkdir(exist_ok=True)
+
+        # Create example script
+        example_script = scripts_dir / "example.py"
+        example_script.write_text(generate_example_script(safe_name))
 
     return skill_dir
 
 
-def validate_skill_name(name: str) -> tuple[bool, str]:
-    """Validate a skill name.
+def generate_example_script(skill_name: str) -> str:
+    """Generate an example Python script for a skill.
 
     Args:
-        name: The proposed skill name
+        skill_name: Name of the skill
 
     Returns:
-        Tuple of (is_valid: bool, error_message: str)
+        Python script content
     """
-    if not name:
-        return False, "Skill name cannot be empty"
+    return f'''#!/usr/bin/env python3
+"""Example utility script for {skill_name} skill.
 
-    if len(name) > 100:
-        return False, "Skill name too long (max 100 characters)"
+This script can be executed by Claude when using this skill.
+The output will be returned to Claude (the script code itself
+is not loaded into context).
 
-    # Check for at least one alphanumeric character
-    if not any(c.isalnum() for c in name):
-        return False, "Skill name must contain at least one alphanumeric character"
+Usage:
+    python scripts/example.py [args]
+"""
 
-    return True, ""
+import sys
+import json
+
+
+def main():
+    """Main function."""
+    # Example: Process input and return structured output
+    result = {{
+        "status": "success",
+        "message": "Example script executed successfully",
+        "skill": "{skill_name}",
+    }}
+
+    # Output JSON for easy parsing
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+
+def generate_reference_doc(skill_name: str, topic: str = "Reference") -> str:
+    """Generate a reference document template.
+
+    Args:
+        skill_name: Name of the skill
+        topic: Topic for the reference document
+
+    Returns:
+        Markdown content
+    """
+    return f"""# {topic}
+
+This document provides additional reference information for the {skill_name} skill.
+
+## Overview
+
+<!-- Add detailed documentation here -->
+
+## API Reference
+
+<!-- If this skill interacts with an API, document it here -->
+
+## Examples
+
+<!-- Add detailed examples here -->
+
+## Troubleshooting
+
+<!-- Add common issues and solutions here -->
+"""
+
+
+def add_reference_doc(
+    skill_dir: Path,
+    filename: str,
+    content: Optional[str] = None,
+) -> Path:
+    """Add a reference document to a skill.
+
+    Args:
+        skill_dir: Path to the skill directory
+        filename: Name for the markdown file (e.g., "REFERENCE.md")
+        content: Optional content (generates template if not provided)
+
+    Returns:
+        Path to the created file
+    """
+    if not filename.endswith(".md"):
+        filename = f"{filename}.md"
+
+    # Get skill name for template
+    skill_name = skill_dir.name
+
+    if content is None:
+        topic = filename.replace(".md", "").replace("-", " ").replace("_", " ").title()
+        content = generate_reference_doc(skill_name, topic)
+
+    file_path = skill_dir / filename
+    file_path.write_text(content)
+
+    return file_path
+
+
+def add_script(
+    skill_dir: Path,
+    filename: str,
+    content: Optional[str] = None,
+    language: str = "python",
+) -> Path:
+    """Add a script to a skill.
+
+    Args:
+        skill_dir: Path to the skill directory
+        filename: Name for the script file
+        content: Optional content (generates template if not provided)
+        language: Script language ("python", "bash", "node")
+
+    Returns:
+        Path to the created file
+    """
+    scripts_dir = skill_dir / "scripts"
+    scripts_dir.mkdir(exist_ok=True)
+
+    # Ensure correct extension
+    ext_map = {
+        "python": ".py",
+        "bash": ".sh",
+        "node": ".js",
+        "javascript": ".js",
+    }
+    expected_ext = ext_map.get(language, "")
+    if expected_ext and not filename.endswith(expected_ext):
+        filename = f"{filename}{expected_ext}"
+
+    if content is None:
+        content = _generate_script_template(skill_dir.name, language)
+
+    file_path = scripts_dir / filename
+    file_path.write_text(content)
+
+    # Make executable on Unix
+    try:
+        file_path.chmod(0o755)
+    except OSError:
+        pass  # Windows doesn't support chmod
+
+    return file_path
+
+
+def _generate_script_template(skill_name: str, language: str) -> str:
+    """Generate a script template."""
+    if language == "python":
+        return generate_example_script(skill_name)
+
+    elif language in ("bash", "sh"):
+        return f"""#!/bin/bash
+# Utility script for {skill_name} skill
+
+set -euo pipefail
+
+echo "Script executed successfully"
+"""
+
+    elif language in ("node", "javascript"):
+        return f"""#!/usr/bin/env node
+/**
+ * Utility script for {skill_name} skill
+ */
+
+console.log(JSON.stringify({{
+    status: "success",
+    message: "Script executed successfully",
+    skill: "{skill_name}"
+}}, null, 2));
+"""
+
+    else:
+        return f"# Script for {skill_name}\n"

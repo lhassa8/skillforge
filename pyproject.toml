@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "skillforge"
 version = "0.1.0"
-description = "Create, test, and run deterministic Skills — reproducible, automated tasks for any codebase"
+description = "Create, validate, and bundle Anthropic Agent Skills — custom instructions that extend Claude's capabilities"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
@@ -16,22 +16,19 @@ maintainers = [
     { name = "SkillForge Contributors" }
 ]
 keywords = [
+    "anthropic",
+    "claude",
+    "agent-skills",
     "cli",
-    "automation",
+    "ai",
+    "llm",
     "skills",
-    "testing",
-    "deterministic",
-    "devops",
-    "workflow",
-    "reproducible",
-    "sandbox",
-    "yaml",
+    "automation",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
     "Intended Audience :: Developers",
-    "Intended Audience :: System Administrators",
     "License :: OSI Approved :: MIT License",
     "Operating System :: MacOS",
     "Operating System :: POSIX :: Linux",
@@ -40,9 +37,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
-    "Topic :: Software Development :: Build Tools",
-    "Topic :: Software Development :: Testing",
-    "Topic :: System :: Systems Administration",
+    "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Utilities",
     "Typing :: Typed",
 ]
@@ -60,19 +55,6 @@ Issues = "https://github.com/lhassa8/skillforge/issues"
 Changelog = "https://github.com/lhassa8/skillforge/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-ai = [
-    "anthropic>=0.18.0",
-    "openai>=1.0.0",
-]
-crypto = [
-    "cryptography>=41.0.0",
-]
-vault = [
-    "hvac>=2.0.0",
-]
-all = [
-    "skillforge[ai,crypto,vault]",
-]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
