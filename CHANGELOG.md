@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2025-01-16
+
+### Fixed
+
+- Excluded `.claude/` directory from package builds (security fix)
+- Added sdist exclusion rules in pyproject.toml for sensitive files
+
 ## [0.2.1] - 2025-01-14
 
 ### Added

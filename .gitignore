@@ -54,3 +54,6 @@ Thumbs.db
 api_key.txt
 skills/
 *.zip
+
+# Claude Code settings (may contain sensitive data)
+.claude/

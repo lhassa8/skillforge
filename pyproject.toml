@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ai-skillforge"
-version = "0.2.1"
+version = "0.2.2"
 description = "Create, validate, and bundle Anthropic Agent Skills — custom instructions that extend Claude's capabilities"
 readme = "README.md"
 license = "MIT"
@@ -78,6 +78,14 @@ skillforge = "skillforge.cli:app"
 
 [tool.hatch.build.targets.wheel]
 packages = ["skillforge"]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    ".claude/",
+    "api_key.txt",
+    "skills/",
+    "*.zip",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
