@@ -32,7 +32,7 @@ Agent Skills are custom instructions that teach Claude how to handle specific ta
 - Data analysis workflows
 - Domain-specific assistants
 
-SkillForge handles the entire skill development lifecycle: **generate → validate → improve → bundle → deploy**.
+SkillForge handles the entire skill development lifecycle: **generate → validate → test → improve → bundle → deploy**.
 
 ---
 
@@ -116,13 +116,19 @@ skillforge generate "Review Python code for security vulnerabilities" --name sec
 # 2. Check the generated content
 skillforge show ./skills/security-reviewer
 
-# 3. Improve it with AI (optional)
+# 3. Add tests (create tests.yml in the skill directory)
+# See "Skill Testing" section for format
+
+# 4. Run tests to verify behavior
+skillforge test ./skills/security-reviewer
+
+# 5. Improve it with AI (optional)
 skillforge improve ./skills/security-reviewer "Add examples for Django and FastAPI"
 
-# 4. Validate against Anthropic requirements
+# 6. Validate against Anthropic requirements
 skillforge validate ./skills/security-reviewer
 
-# 5. Bundle for upload
+# 7. Bundle for upload
 skillforge bundle ./skills/security-reviewer
 
 # Output: skills/security-reviewer_20240115_143022.zip
@@ -281,6 +287,204 @@ Check installation health and dependencies.
 
 ```bash
 skillforge doctor
+```
+
+---
+
+### Testing Commands
+
+#### `skillforge test`
+
+Test your skills before deployment. Supports mock mode (fast, free) and live mode (real API calls).
+
+```bash
+# Run tests in mock mode (default)
+skillforge test ./skills/my-skill
+
+# Run tests with real API calls
+skillforge test ./skills/my-skill --mode live
+
+# Filter tests by tags
+skillforge test ./skills/my-skill --tags smoke,critical
+
+# Filter tests by name
+skillforge test ./skills/my-skill --name "basic_*"
+
+# Output formats for CI/CD
+skillforge test ./skills/my-skill --format json -o results.json
+skillforge test ./skills/my-skill --format junit -o results.xml
+
+# Estimate cost before running live tests
+skillforge test ./skills/my-skill --mode live --estimate-cost
+
+# Stop at first failure
+skillforge test ./skills/my-skill --stop
+
+# Verbose output with responses
+skillforge test ./skills/my-skill -v
+```
+
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `--mode, -m` | Test mode: `mock` (default) or `live` |
+| `--provider, -p` | AI provider for live mode |
+| `--model` | Model to use for live mode |
+| `--tags, -t` | Run only tests with these tags (comma-separated) |
+| `--name, -n` | Run only tests matching these names |
+| `--format, -f` | Output format: `human`, `json`, `junit` |
+| `--output, -o` | Write results to file |
+| `--verbose, -v` | Show detailed output including responses |
+| `--estimate-cost` | Show cost estimate without running tests |
+| `--stop, -s` | Stop at first failure |
+| `--timeout` | Timeout per test in seconds (default: 30) |
+
+---
+
+## Skill Testing
+
+Test your skills before deployment to catch issues early.
+
+### Test File Location
+
+Tests are defined in YAML files within your skill directory:
+
+```
+my-skill/
+├── SKILL.md
+├── tests.yml              # Option 1: Single test file
+└── tests/                 # Option 2: Multiple test files
+    ├── smoke.test.yml
+    └── full.test.yml
+```
+
+### Test Definition Format
+
+```yaml
+version: "1.0"
+
+defaults:
+  timeout: 30
+
+tests:
+  - name: "basic_commit_request"
+    description: "Tests basic commit message generation"
+    input: "Help me write a commit message for adding user auth"
+    assertions:
+      - type: contains
+        value: "feat"
+      - type: regex
+        pattern: "(feat|fix|docs):"
+      - type: length
+        min: 10
+        max: 200
+    trigger:
+      should_trigger: true
+    mock:
+      response: |
+        feat: add user authentication
+
+        - Implement login/logout
+        - Add session management
+    tags: ["smoke", "basic"]
+
+  - name: "handles_empty_input"
+    description: "Should ask for clarification"
+    input: "commit message"
+    assertions:
+      - type: contains
+        value: "what changes"
+        case_sensitive: false
+    trigger:
+      should_trigger: false
+    mock:
+      response: "What changes would you like me to describe?"
+    tags: ["edge-case"]
+```
+
+### Assertion Types
+
+| Type | Description | Example |
+|------|-------------|---------|
+| `contains` | Text is present | `value: "error"` |
+| `not_contains` | Text is absent | `value: "exception"` |
+| `regex` | Pattern matches | `pattern: "(feat\|fix):"` |
+| `starts_with` | Response starts with | `value: "Here's"` |
+| `ends_with` | Response ends with | `value: "."` |
+| `length` | Length within bounds | `min: 10, max: 500` |
+| `json_valid` | Valid JSON | (no params) |
+| `json_path` | JSONPath value | `path: "$.status", value: "ok"` |
+| `equals` | Exact match | `value: "expected text"` |
+
+### Mock vs Live Mode
+
+**Mock Mode** (default):
+- Fast and free - no API calls
+- Uses pattern matching for trigger detection
+- Validates assertions against mock responses
+- Great for rapid development and CI
+
+**Live Mode** (`--mode live`):
+- Makes real API calls
+- Tests actual skill behavior
+- Tracks token usage and cost
+- Use for final validation before deployment
+
+```bash
+# Check cost before running
+skillforge test ./skills/my-skill --mode live --estimate-cost
+
+# Run live tests
+skillforge test ./skills/my-skill --mode live
+```
+
+### CI/CD Integration
+
+Use JUnit XML output for CI systems:
+
+```bash
+skillforge test ./skills/my-skill --format junit -o test-results.xml
+```
+
+**GitHub Actions example:**
+
+```yaml
+- name: Test skills
+  run: |
+    skillforge test ./skills/my-skill --format junit -o results.xml
+
+- name: Upload test results
+  uses: actions/upload-artifact@v3
+  with:
+    name: test-results
+    path: results.xml
+```
+
+### Programmatic Testing
+
+```python
+from pathlib import Path
+from skillforge import (
+    load_test_suite,
+    run_test_suite,
+    TestSuiteResult,
+)
+
+# Load skill and tests
+skill, suite = load_test_suite(Path("./skills/my-skill"))
+
+# Run in mock mode
+result: TestSuiteResult = run_test_suite(skill, suite, mode="mock")
+
+print(f"Passed: {result.passed_tests}/{result.total_tests}")
+print(f"Duration: {result.duration_ms:.1f}ms")
+
+if not result.success:
+    for test_result in result.test_results:
+        if not test_result.passed:
+            print(f"FAILED: {test_result.test_case.name}")
+            for assertion in test_result.failed_assertions:
+                print(f"  - {assertion.message}")
 ```
 
 ---
