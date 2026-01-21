@@ -1,6 +1,6 @@
 """SkillForge - Create, validate, and bundle Anthropic Agent Skills."""
 
-__version__ = "0.2.2"
+__version__ = "0.3.0"
 
 from skillforge.skill import (
     Skill,
@@ -30,6 +30,26 @@ from skillforge.ai import (
     get_available_providers,
     GenerationResult,
 )
+from skillforge.tester import (
+    TestCase,
+    TestResult,
+    TestSuiteResult,
+    TestSuiteDefinition,
+    AssertionType,
+    TestStatus,
+    Assertion,
+    AssertionResult,
+    run_test_suite,
+    run_test_mock,
+    run_test_live,
+    load_test_suite,
+    discover_tests,
+    evaluate_assertion,
+    estimate_live_cost,
+    SkillTestError,
+    TestDefinitionError,
+    TestExecutionError,
+)
 
 __all__ = [
     # Version
@@ -57,4 +77,23 @@ __all__ = [
     "improve_skill",
     "get_available_providers",
     "GenerationResult",
+    # Testing
+    "TestCase",
+    "TestResult",
+    "TestSuiteResult",
+    "TestSuiteDefinition",
+    "AssertionType",
+    "TestStatus",
+    "Assertion",
+    "AssertionResult",
+    "run_test_suite",
+    "run_test_mock",
+    "run_test_live",
+    "load_test_suite",
+    "discover_tests",
+    "evaluate_assertion",
+    "estimate_live_cost",
+    "SkillTestError",
+    "TestDefinitionError",
+    "TestExecutionError",
 ]

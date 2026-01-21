@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2025-01-21
+
+### Added
+
+- **Skill Testing Framework** - Test your skills before deployment
+  - `skillforge test` command with mock and live modes
+  - YAML-based test definitions (`tests.yml` or `tests/*.test.yml`)
+  - Multiple assertion types: `contains`, `not_contains`, `regex`, `starts_with`, `ends_with`, `length`, `json_valid`, `json_path`, `equals`
+  - Mock mode for fast, free testing with pattern matching
+  - Live mode for real API validation
+  - Output formats: human-readable, JSON, JUnit XML (for CI)
+  - Cost estimation for live mode (`--estimate-cost`)
+  - Tag and name filtering (`--tags`, `--name`)
+  - Stop on first failure (`--stop`)
+
+- **Programmatic Testing API**
+  - `TestCase`, `TestResult`, `TestSuiteResult` classes
+  - `run_test_suite()`, `run_test_mock()`, `run_test_live()` functions
+  - `load_test_suite()`, `discover_tests()` for test discovery
+  - `evaluate_assertion()` for custom assertion evaluation
+  - `estimate_live_cost()` for cost projections
+
 ## [0.2.2] - 2025-01-16
 
 ### Fixed

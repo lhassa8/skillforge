@@ -1,9 +1,14 @@
 """SkillForge CLI - Create and manage Anthropic Agent Skills."""
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import typer
+
+if TYPE_CHECKING:
+    from skillforge.tester import TestSuiteResult
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
@@ -756,6 +761,363 @@ def improve(
 
         console.print()
         console.print(f"[green]✓ Skill improved and saved:[/green] {skill_md_path}")
+
+
+@app.command()
+def test(
+    skill_path: Path = typer.Argument(..., help="Path to the skill directory"),
+    mode: str = typer.Option(
+        "mock",
+        "--mode",
+        "-m",
+        help="Test mode: 'mock' (pattern matching) or 'live' (real API calls)",
+    ),
+    provider: Optional[str] = typer.Option(
+        None,
+        "--provider",
+        "-p",
+        help="AI provider for live mode (anthropic, openai, ollama)",
+    ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        help="Model to use for live mode",
+    ),
+    tags: Optional[str] = typer.Option(
+        None,
+        "--tags",
+        "-t",
+        help="Run only tests with these tags (comma-separated)",
+    ),
+    names: Optional[str] = typer.Option(
+        None,
+        "--name",
+        "-n",
+        help="Run only tests matching these names (comma-separated)",
+    ),
+    output_format: str = typer.Option(
+        "human",
+        "--format",
+        "-f",
+        help="Output format: 'human', 'json', or 'junit'",
+    ),
+    output_file: Optional[Path] = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Write results to file",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Show detailed output including responses",
+    ),
+    estimate_cost: bool = typer.Option(
+        False,
+        "--estimate-cost",
+        help="Estimate cost for live mode without running tests",
+    ),
+    timeout: int = typer.Option(
+        30,
+        "--timeout",
+        help="Timeout in seconds for each test (live mode)",
+    ),
+    stop_on_failure: bool = typer.Option(
+        False,
+        "--stop",
+        "-s",
+        help="Stop at first failure",
+    ),
+) -> None:
+    """Run tests for a skill.
+
+    Tests are defined in YAML files within the skill directory:
+    - <skill>/tests.yml
+    - <skill>/tests/*.test.yml
+
+    Mock mode (default) uses pattern matching and predefined responses.
+    Live mode makes real API calls to validate skill behavior.
+
+    Example:
+
+    \b
+        skillforge test ./skills/my-skill
+        skillforge test ./skills/my-skill --mode live
+        skillforge test ./skills/my-skill --tags smoke,critical
+        skillforge test ./skills/my-skill --format json -o results.json
+        skillforge test ./skills/my-skill --mode live --estimate-cost
+    """
+    from skillforge.tester import (
+        discover_tests,
+        estimate_live_cost,
+        load_test_suite,
+        run_test_suite,
+        TestDefinitionError,
+    )
+    from skillforge.ai import get_default_provider
+
+    skill_path = Path(skill_path)
+
+    if not skill_path.exists():
+        console.print(f"[red]Error:[/red] Skill not found: {skill_path}")
+        raise typer.Exit(code=1)
+
+    # Discover tests
+    test_files = discover_tests(skill_path)
+    if not test_files:
+        console.print(f"[yellow]No tests found for skill:[/yellow] {skill_path}")
+        console.print("[dim]Create tests.yml or tests/*.test.yml[/dim]")
+        console.print()
+        console.print("[bold]Example tests.yml:[/bold]")
+        console.print("""[dim]
+version: "1.0"
+tests:
+  - name: "basic_test"
+    input: "Test input for the skill"
+    assertions:
+      - type: contains
+        value: "expected text"
+    mock:
+      response: "Mocked response for testing"
+[/dim]""")
+        raise typer.Exit(code=0)
+
+    console.print()
+    console.print(f"[bold]Testing skill:[/bold] {skill_path.name}")
+    console.print(f"[dim]Mode: {mode} | Tests found: {len(test_files)} file(s)[/dim]")
+
+    # Load skill and tests
+    try:
+        skill, suite = load_test_suite(skill_path)
+    except TestDefinitionError as e:
+        console.print(f"[red]Error loading tests:[/red] {e}")
+        raise typer.Exit(code=1)
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=1)
+
+    # Handle live mode provider
+    if mode == "live":
+        if provider is None:
+            default = get_default_provider()
+            if default:
+                provider, model = default[0], model or default[1]
+            else:
+                console.print("[red]Error:[/red] No AI provider available for live mode.")
+                console.print("Run [cyan]skillforge providers[/cyan] to check status.")
+                raise typer.Exit(code=1)
+        console.print(f"[dim]Provider: {provider} ({model})[/dim]")
+
+    # Handle cost estimation
+    if estimate_cost:
+        if mode != "live":
+            console.print("[yellow]Cost estimation only applies to live mode[/yellow]")
+            raise typer.Exit(code=0)
+
+        estimate = estimate_live_cost(suite, model or "claude-sonnet-4-20250514")
+
+        console.print()
+        console.print("[bold]Cost Estimate:[/bold]")
+        console.print(f"  Tests to run: {estimate['num_tests']}")
+        console.print(f"  Est. input tokens: {estimate['estimated_input_tokens']:,}")
+        console.print(f"  Est. output tokens: {estimate['estimated_output_tokens']:,}")
+        console.print(f"  [bold]Est. total cost: ${estimate['estimated_total_cost']:.4f}[/bold]")
+        console.print(f"  [dim]{estimate['note']}[/dim]")
+        raise typer.Exit(code=0)
+
+    # Parse filters
+    filter_tags = tags.split(",") if tags else None
+    filter_names = names.split(",") if names else None
+
+    # Run tests
+    console.print()
+
+    with console.status("[bold green]Running tests..."):
+        result = run_test_suite(
+            skill=skill,
+            suite=suite,
+            mode=mode,  # type: ignore[arg-type]
+            provider=provider,
+            model=model,
+            filter_tags=filter_tags,
+            filter_names=filter_names,
+            stop_on_failure=stop_on_failure,
+        )
+
+    # Output results
+    if output_format == "json":
+        output = _format_results_json(result)
+        if output_file:
+            output_file.write_text(output)
+            console.print(f"[green]Results written to:[/green] {output_file}")
+        else:
+            console.print(output)
+
+    elif output_format == "junit":
+        output = _format_results_junit(result)
+        if output_file:
+            output_file.write_text(output)
+            console.print(f"[green]JUnit XML written to:[/green] {output_file}")
+        else:
+            console.print(output)
+
+    else:  # human format
+        _display_results_human(result, verbose)
+
+    # Exit with appropriate code
+    if result.success:
+        raise typer.Exit(code=0)
+    else:
+        raise typer.Exit(code=1)
+
+
+def _display_results_human(result: "TestSuiteResult", verbose: bool) -> None:
+    """Display test results in human-readable format."""
+    from skillforge.tester import TestStatus
+
+    # Results table
+    table = Table(title="Test Results", show_header=True, header_style="bold")
+    table.add_column("Test", style="cyan")
+    table.add_column("Status")
+    table.add_column("Duration", justify="right")
+    table.add_column("Details", style="dim")
+
+    for tr in result.test_results:
+        if tr.status == TestStatus.PASSED:
+            status = "[green]PASS[/green]"
+        elif tr.status == TestStatus.FAILED:
+            status = "[red]FAIL[/red]"
+        elif tr.status == TestStatus.SKIPPED:
+            status = "[yellow]SKIP[/yellow]"
+        else:
+            status = "[red]ERROR[/red]"
+
+        duration = f"{tr.duration_ms:.1f}ms"
+
+        details = ""
+        if tr.failed_assertions:
+            details = f"{len(tr.failed_assertions)} assertion(s) failed"
+        elif tr.error:
+            details = tr.error[:40] + "..." if len(tr.error) > 40 else tr.error
+
+        table.add_row(tr.test_case.name, status, duration, details)
+
+    console.print(table)
+
+    # Verbose output: show failures
+    if verbose or result.failed_tests > 0:
+        for tr in result.test_results:
+            if tr.status == TestStatus.FAILED:
+                console.print()
+                console.print(f"[red bold]FAILED:[/red bold] {tr.test_case.name}")
+                for ar in tr.failed_assertions:
+                    console.print(f"  [red]✗[/red] {ar.message}")
+                    if ar.actual_value:
+                        console.print(f"    [dim]Got: {ar.actual_value}[/dim]")
+
+                if verbose and tr.response:
+                    console.print()
+                    console.print("[dim]Response:[/dim]")
+                    console.print(Panel(tr.response[:500], border_style="dim"))
+
+    # Summary
+    console.print()
+    summary_parts = []
+    summary_parts.append(f"[green]{result.passed_tests} passed[/green]")
+    if result.failed_tests:
+        summary_parts.append(f"[red]{result.failed_tests} failed[/red]")
+    if result.skipped_tests:
+        summary_parts.append(f"[yellow]{result.skipped_tests} skipped[/yellow]")
+    if result.error_tests:
+        summary_parts.append(f"[red]{result.error_tests} errors[/red]")
+
+    console.print(f"[bold]Summary:[/bold] {', '.join(summary_parts)}")
+    console.print(f"[dim]Total time: {result.duration_ms:.1f}ms | Mode: {result.mode}[/dim]")
+
+    if result.mode == "live" and result.total_cost > 0:
+        console.print(f"[dim]Estimated cost: ${result.total_cost:.4f}[/dim]")
+
+
+def _format_results_json(result: "TestSuiteResult") -> str:
+    """Format test results as JSON."""
+    import json
+
+    data = {
+        "skill": result.skill.name,
+        "mode": result.mode,
+        "summary": {
+            "total": result.total_tests,
+            "passed": result.passed_tests,
+            "failed": result.failed_tests,
+            "skipped": result.skipped_tests,
+            "errors": result.error_tests,
+            "duration_ms": result.duration_ms,
+            "cost_estimate": result.total_cost,
+        },
+        "tests": [
+            {
+                "name": tr.test_case.name,
+                "description": tr.test_case.description,
+                "status": tr.status.value,
+                "duration_ms": tr.duration_ms,
+                "assertions": [
+                    {
+                        "type": ar.assertion.type.value,
+                        "passed": ar.passed,
+                        "message": ar.message,
+                        "actual": ar.actual_value,
+                    }
+                    for ar in tr.assertion_results
+                ],
+                "error": tr.error,
+            }
+            for tr in result.test_results
+        ],
+    }
+
+    return json.dumps(data, indent=2)
+
+
+def _format_results_junit(result: "TestSuiteResult") -> str:
+    """Format test results as JUnit XML for CI integration."""
+    from xml.etree.ElementTree import Element, SubElement, tostring
+    from xml.dom import minidom
+    from skillforge.tester import TestStatus
+
+    testsuite = Element("testsuite")
+    testsuite.set("name", result.skill.name)
+    testsuite.set("tests", str(result.total_tests))
+    testsuite.set("failures", str(result.failed_tests))
+    testsuite.set("errors", str(result.error_tests))
+    testsuite.set("skipped", str(result.skipped_tests))
+    testsuite.set("time", f"{result.duration_ms / 1000:.3f}")
+
+    for tr in result.test_results:
+        testcase = SubElement(testsuite, "testcase")
+        testcase.set("name", tr.test_case.name)
+        testcase.set("classname", f"{result.skill.name}.{tr.test_case.name}")
+        testcase.set("time", f"{tr.duration_ms / 1000:.3f}")
+
+        if tr.status == TestStatus.FAILED:
+            for ar in tr.failed_assertions:
+                failure = SubElement(testcase, "failure")
+                failure.set("message", ar.message)
+                if ar.actual_value:
+                    failure.text = f"Actual: {ar.actual_value}"
+
+        elif tr.status == TestStatus.ERROR:
+            error = SubElement(testcase, "error")
+            error.set("message", tr.error or "Unknown error")
+
+        elif tr.status == TestStatus.SKIPPED:
+            skipped = SubElement(testcase, "skipped")
+            if tr.error:
+                skipped.set("message", tr.error)
+
+    rough_string = tostring(testsuite, encoding="unicode")
+    reparsed = minidom.parseString(rough_string)
+    return reparsed.toprettyxml(indent="  ")
 
 
 @app.command()
