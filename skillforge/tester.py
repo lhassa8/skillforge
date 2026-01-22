@@ -28,6 +28,7 @@ class AssertionType(Enum):
     JSON_VALID = "json_valid"
     JSON_PATH = "json_path"
     EQUALS = "equals"
+    SIMILAR_TO = "similar_to"  # Fuzzy matching for regression testing
 
 
 class TestStatus(Enum):
@@ -86,6 +87,8 @@ class Assertion:
     min: Optional[int] = None  # For length
     max: Optional[int] = None  # For length
     case_sensitive: bool = True
+    threshold: float = 0.8  # For similar_to: similarity threshold (0.0-1.0)
+    baseline: Optional[str] = None  # For similar_to: baseline response
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Assertion:
@@ -99,6 +102,8 @@ class Assertion:
             min=data.get("min"),
             max=data.get("max"),
             case_sensitive=data.get("case_sensitive", True),
+            threshold=data.get("threshold", 0.8),
+            baseline=data.get("baseline"),
         )
 
 
@@ -393,6 +398,30 @@ def load_test_suite(
     return skill, merged_suite
 
 
+def _compute_similarity(text1: str, text2: str) -> float:
+    """Compute similarity ratio between two texts using difflib.
+
+    Args:
+        text1: First text
+        text2: Second text
+
+    Returns:
+        Similarity ratio between 0.0 and 1.0
+    """
+    from difflib import SequenceMatcher
+
+    # Normalize texts
+    t1 = text1.strip().lower()
+    t2 = text2.strip().lower()
+
+    if not t1 and not t2:
+        return 1.0
+    if not t1 or not t2:
+        return 0.0
+
+    return SequenceMatcher(None, t1, t2).ratio()
+
+
 def _evaluate_jsonpath(data: Any, path: str) -> Any:
     """Simple JSONPath evaluator for basic paths like $.key.subkey."""
     if not path.startswith("$"):
@@ -524,6 +553,21 @@ def evaluate_assertion(assertion: Assertion, response: str) -> AssertionResult:
             passed = response.strip() == assertion.value.strip()
             message = "Expected exact match"
             actual = response[:100] + "..." if len(response) > 100 else response
+
+    elif assertion.type == AssertionType.SIMILAR_TO:
+        # Use baseline if provided, otherwise use value
+        baseline = assertion.baseline or assertion.value
+        if baseline is None:
+            passed = False
+            message = "Assertion baseline or value is required for 'similar_to'"
+        else:
+            similarity = _compute_similarity(response, baseline)
+            passed = similarity >= assertion.threshold
+            message = (
+                f"Similarity {similarity:.2%} "
+                f"{'≥' if passed else '<'} threshold {assertion.threshold:.0%}"
+            )
+            actual = f"similarity={similarity:.2%}"
 
     return AssertionResult(
         assertion=assertion,
@@ -923,3 +967,355 @@ def estimate_live_cost(
         "model": model,
         "note": "Actual costs may vary based on response lengths",
     }
+
+
+# =============================================================================
+# Regression Testing
+# =============================================================================
+
+
+BASELINE_FILE_NAME = "baselines.yml"
+
+
+@dataclass
+class RegressionBaseline:
+    """Baseline response for regression testing.
+
+    Attributes:
+        test_name: Name of the test case
+        response: Baseline response text
+        recorded_at: When the baseline was recorded
+        version: Skill version when baseline was recorded
+        provider: AI provider used (for live mode)
+        model: Model used (for live mode)
+    """
+    test_name: str
+    response: str
+    recorded_at: str
+    version: Optional[str] = None
+    provider: Optional[str] = None
+    model: Optional[str] = None
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for serialization."""
+        return {
+            "response": self.response,
+            "recorded_at": self.recorded_at,
+            "version": self.version,
+            "provider": self.provider,
+            "model": self.model,
+        }
+
+    @classmethod
+    def from_dict(cls, test_name: str, data: dict) -> RegressionBaseline:
+        """Create from dictionary."""
+        return cls(
+            test_name=test_name,
+            response=data["response"],
+            recorded_at=data.get("recorded_at", ""),
+            version=data.get("version"),
+            provider=data.get("provider"),
+            model=data.get("model"),
+        )
+
+
+@dataclass
+class RegressionBaselineFile:
+    """Collection of regression baselines for a skill.
+
+    Stored as baselines.yml in the skill directory.
+    """
+    version: str = "1"
+    skill_version: Optional[str] = None
+    baselines: dict[str, RegressionBaseline] = field(default_factory=dict)
+
+    def add_baseline(
+        self,
+        test_name: str,
+        response: str,
+        version: Optional[str] = None,
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
+    ) -> RegressionBaseline:
+        """Add or update a baseline."""
+        baseline = RegressionBaseline(
+            test_name=test_name,
+            response=response,
+            recorded_at=datetime.now().isoformat(),
+            version=version,
+            provider=provider,
+            model=model,
+        )
+        self.baselines[test_name] = baseline
+        return baseline
+
+    def get_baseline(self, test_name: str) -> Optional[RegressionBaseline]:
+        """Get baseline for a test."""
+        return self.baselines.get(test_name)
+
+    def has_baseline(self, test_name: str) -> bool:
+        """Check if baseline exists for a test."""
+        return test_name in self.baselines
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for serialization."""
+        return {
+            "version": self.version,
+            "skill_version": self.skill_version,
+            "baselines": {
+                name: bl.to_dict()
+                for name, bl in sorted(self.baselines.items())
+            },
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> RegressionBaselineFile:
+        """Create from dictionary."""
+        baselines = {}
+        for name, bl_data in data.get("baselines", {}).items():
+            baselines[name] = RegressionBaseline.from_dict(name, bl_data)
+
+        return cls(
+            version=data.get("version", "1"),
+            skill_version=data.get("skill_version"),
+            baselines=baselines,
+        )
+
+    def save(self, path: Path) -> None:
+        """Save baselines to disk."""
+        if path.is_dir():
+            path = path / BASELINE_FILE_NAME
+
+        content = yaml.dump(
+            self.to_dict(),
+            default_flow_style=False,
+            allow_unicode=True,
+            sort_keys=False,
+        )
+        path.write_text(content)
+
+    @classmethod
+    def load(cls, path: Path) -> RegressionBaselineFile:
+        """Load baselines from disk."""
+        if path.is_dir():
+            path = path / BASELINE_FILE_NAME
+
+        if not path.exists():
+            raise SkillTestError(f"Baseline file not found: {path}")
+
+        content = path.read_text()
+        data = yaml.safe_load(content)
+
+        if not isinstance(data, dict):
+            raise SkillTestError(f"Invalid baseline file format: {path}")
+
+        return cls.from_dict(data)
+
+    @classmethod
+    def load_or_create(cls, path: Path) -> RegressionBaselineFile:
+        """Load existing baselines or create new."""
+        try:
+            return cls.load(path)
+        except SkillTestError:
+            return cls()
+
+
+@dataclass
+class RegressionResult:
+    """Result of a regression test comparison."""
+    test_name: str
+    passed: bool
+    similarity: float
+    threshold: float
+    current_response: str
+    baseline_response: str
+    baseline_version: Optional[str] = None
+    message: str = ""
+
+
+@dataclass
+class RegressionSuiteResult:
+    """Result of running regression tests for a skill."""
+    skill_name: str
+    skill_version: Optional[str]
+    total_tests: int = 0
+    passed_tests: int = 0
+    failed_tests: int = 0
+    missing_baselines: int = 0
+    results: list[RegressionResult] = field(default_factory=list)
+
+    @property
+    def success(self) -> bool:
+        """Check if all regression tests passed."""
+        return self.failed_tests == 0
+
+
+def record_baselines(
+    skill: Skill,
+    suite: TestSuiteDefinition,
+    baselines_path: Path,
+    mode: Literal["mock", "live"] = "mock",
+    provider: Optional[str] = None,
+    model: Optional[str] = None,
+    overwrite: bool = False,
+) -> RegressionBaselineFile:
+    """Record baseline responses for regression testing.
+
+    Args:
+        skill: The skill to test
+        suite: Test suite definition
+        baselines_path: Path to save baselines
+        mode: "mock" or "live"
+        provider: AI provider (required for live mode)
+        model: Model to use (required for live mode)
+        overwrite: If True, overwrite existing baselines
+
+    Returns:
+        RegressionBaselineFile with recorded baselines
+    """
+    baselines = RegressionBaselineFile.load_or_create(baselines_path)
+    baselines.skill_version = skill.version
+
+    for test_case in suite.tests:
+        if test_case.skip_reason:
+            continue
+
+        # Skip if baseline exists and not overwriting
+        if baselines.has_baseline(test_case.name) and not overwrite:
+            continue
+
+        # Run the test to get response
+        if mode == "mock":
+            result = run_test_mock(skill, test_case)
+        else:
+            if not provider or not model:
+                raise ValueError("Provider and model required for live mode")
+            result = run_test_live(skill, test_case, provider, model)
+
+        if result.response:
+            baselines.add_baseline(
+                test_name=test_case.name,
+                response=result.response,
+                version=skill.version,
+                provider=provider,
+                model=model,
+            )
+
+    baselines.save(baselines_path)
+    return baselines
+
+
+def run_regression_tests(
+    skill: Skill,
+    suite: TestSuiteDefinition,
+    baselines: RegressionBaselineFile,
+    mode: Literal["mock", "live"] = "mock",
+    provider: Optional[str] = None,
+    model: Optional[str] = None,
+    threshold: float = 0.8,
+    stop_on_failure: bool = False,
+) -> RegressionSuiteResult:
+    """Run regression tests comparing current responses to baselines.
+
+    Args:
+        skill: The skill to test
+        suite: Test suite definition
+        baselines: Baseline file to compare against
+        mode: "mock" or "live"
+        provider: AI provider (required for live mode)
+        model: Model to use (required for live mode)
+        threshold: Similarity threshold (0.0-1.0)
+        stop_on_failure: Stop at first failure
+
+    Returns:
+        RegressionSuiteResult with comparison results
+    """
+    result = RegressionSuiteResult(
+        skill_name=skill.name,
+        skill_version=skill.version,
+    )
+
+    for test_case in suite.tests:
+        if test_case.skip_reason:
+            continue
+
+        result.total_tests += 1
+
+        # Check if baseline exists
+        baseline = baselines.get_baseline(test_case.name)
+        if not baseline:
+            result.missing_baselines += 1
+            result.results.append(RegressionResult(
+                test_name=test_case.name,
+                passed=False,
+                similarity=0.0,
+                threshold=threshold,
+                current_response="",
+                baseline_response="",
+                message="No baseline recorded for this test",
+            ))
+            continue
+
+        # Run the test
+        if mode == "mock":
+            test_result = run_test_mock(skill, test_case)
+        else:
+            if not provider or not model:
+                raise ValueError("Provider and model required for live mode")
+            test_result = run_test_live(skill, test_case, provider, model)
+
+        current_response = test_result.response or ""
+
+        # Compute similarity
+        similarity = _compute_similarity(current_response, baseline.response)
+        passed = similarity >= threshold
+
+        if passed:
+            result.passed_tests += 1
+        else:
+            result.failed_tests += 1
+
+        regression_result = RegressionResult(
+            test_name=test_case.name,
+            passed=passed,
+            similarity=similarity,
+            threshold=threshold,
+            current_response=current_response,
+            baseline_response=baseline.response,
+            baseline_version=baseline.version,
+            message=(
+                f"Similarity {similarity:.2%} "
+                f"{'≥' if passed else '<'} threshold {threshold:.0%}"
+            ),
+        )
+        result.results.append(regression_result)
+
+        if stop_on_failure and not passed:
+            break
+
+    return result
+
+
+def load_baselines(skill_dir: Path) -> RegressionBaselineFile:
+    """Load baselines for a skill.
+
+    Args:
+        skill_dir: Path to the skill directory
+
+    Returns:
+        RegressionBaselineFile
+    """
+    return RegressionBaselineFile.load(skill_dir)
+
+
+def has_baselines(skill_dir: Path) -> bool:
+    """Check if a skill has recorded baselines.
+
+    Args:
+        skill_dir: Path to the skill directory
+
+    Returns:
+        True if baselines exist
+    """
+    baseline_path = skill_dir / BASELINE_FILE_NAME
+    return baseline_path.exists()

@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-01-22
+
+### Added
+
+- **Skill Versioning** - Semantic versioning support for skills
+  - Add `version` field to SKILL.md frontmatter
+  - `skillforge version show ./skills/my-skill` - Display skill version
+  - `skillforge version bump ./skills/my-skill` - Bump version (--major, --minor, --patch)
+  - `skillforge version bump ./skills/my-skill --set 1.0.0` - Set specific version
+  - `skillforge version list <skill-name>` - List available versions from registries
+
+- **Lock Files** - Reproducible skill installations
+  - `skillforge lock ./skills` - Generate `skillforge.lock` with checksums
+  - `skillforge lock --check` - Verify installed skills match lock file
+  - `skillforge pull <skill> --locked` - Install from lock file
+  - SHA256 checksums ensure skill integrity
+
+- **Version Constraints** - Flexible version requirements
+  - Support for `^1.0.0` (caret), `~1.0.0` (tilde), `>=`, `<=`, `>`, `<`, `=` operators
+  - `skillforge pull <skill> --version "^1.0.0"` - Pull with version constraint
+  - Registry skills can list multiple available versions
+
+- **Regression Testing** - Compare responses against baselines
+  - `skillforge test ./skills/my-skill --record-baselines` - Record baseline responses
+  - `skillforge test ./skills/my-skill --regression` - Compare against baselines
+  - `--threshold 0.8` - Configure similarity threshold (default 80%)
+  - New `similar_to` assertion type for fuzzy matching
+
+- **Programmatic Versioning API**
+  - `SkillVersion` dataclass for semantic versions
+  - `VersionConstraint` for dependency resolution
+  - `parse_version()`, `parse_constraint()`, `is_valid_version()`, `compare_versions()`
+  - `SkillLockFile`, `LockedSkill` for lock file management
+  - `generate_lock_file()`, `verify_against_lock()` functions
+  - `record_baselines()`, `run_regression_tests()` for regression testing
+
+### Changed
+
+- `skillforge validate` now validates version format if specified
+- `skillforge pull` supports `--version` and `--locked` options
+- Registry `SkillEntry` includes `versions` field for available versions
+- Skill model includes optional `version` field
+
 ## [0.8.0] - 2025-01-22
 
 ### Added

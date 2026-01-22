@@ -15,6 +15,7 @@ from skillforge.skill import (
     RESERVED_WORDS,
     XML_TAG_PATTERN,
 )
+from skillforge.versioning import is_valid_version
 
 
 @dataclass
@@ -141,6 +142,20 @@ def validate_skill_md(content: str) -> ValidationResult:
 
 def _check_content_quality(skill: Skill, result: ValidationResult) -> None:
     """Check for content quality issues."""
+
+    # Check version if present
+    if skill.version:
+        if not is_valid_version(skill.version):
+            result.add_error(
+                f"Invalid version format: '{skill.version}'. "
+                "Use semantic versioning (e.g., 1.0.0, 2.1.3-beta)",
+                "version"
+            )
+    else:
+        result.add_warning(
+            "No version specified. Consider adding a version for better tracking.",
+            "frontmatter"
+        )
 
     # Check for empty or minimal content
     if len(skill.content.strip()) < 50:
@@ -272,5 +287,28 @@ def validate_description(description: str) -> list[str]:
 
     if XML_TAG_PATTERN.search(description):
         errors.append("Description cannot contain XML tags")
+
+    return errors
+
+
+def validate_version(version: str) -> list[str]:
+    """Validate a skill version string.
+
+    Args:
+        version: The version string to validate
+
+    Returns:
+        List of error messages (empty if valid)
+    """
+    errors = []
+
+    if not version:
+        return errors  # Version is optional
+
+    if not is_valid_version(version):
+        errors.append(
+            f"Invalid version format: '{version}'. "
+            "Use semantic versioning (e.g., 1.0.0, 2.1.3-beta)"
+        )
 
     return errors

@@ -48,6 +48,9 @@ class Skill:
     content: str = ""
     path: Optional[Path] = None
 
+    # Version (semantic versioning)
+    version: Optional[str] = None
+
     # Additional files in the skill directory
     additional_files: list[str] = field(default_factory=list)
     scripts: list[str] = field(default_factory=list)
@@ -58,6 +61,8 @@ class Skill:
     def to_skill_md(self) -> str:
         """Generate SKILL.md content."""
         data: dict = {"name": self.name, "description": self.description}
+        if self.version:
+            data["version"] = self.version
         if self.includes:
             data["includes"] = self.includes
 
@@ -103,6 +108,7 @@ class Skill:
 
         name = frontmatter.get("name")
         description = frontmatter.get("description")
+        version = frontmatter.get("version")
         includes = frontmatter.get("includes", [])
 
         if not name:
@@ -114,11 +120,16 @@ class Skill:
         if not isinstance(includes, list):
             includes = [includes] if includes else []
 
+        # Convert version to string if present
+        if version is not None:
+            version = str(version)
+
         skill = cls(
             name=name,
             description=description,
             content=body,
             path=path,
+            version=version,
             includes=includes,
         )
 

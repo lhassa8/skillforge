@@ -1150,6 +1150,21 @@ def test(
         "-s",
         help="Stop at first failure",
     ),
+    regression: bool = typer.Option(
+        False,
+        "--regression",
+        help="Run regression tests against recorded baselines",
+    ),
+    record_baselines: bool = typer.Option(
+        False,
+        "--record-baselines",
+        help="Record responses as baselines for regression testing",
+    ),
+    threshold: float = typer.Option(
+        0.8,
+        "--threshold",
+        help="Similarity threshold for regression tests (0.0-1.0)",
+    ),
 ) -> None:
     """Run tests for a skill.
 
@@ -1159,6 +1174,7 @@ def test(
 
     Mock mode (default) uses pattern matching and predefined responses.
     Live mode makes real API calls to validate skill behavior.
+    Regression mode compares responses against recorded baselines.
 
     Example:
 
@@ -1168,13 +1184,21 @@ def test(
         skillforge test ./skills/my-skill --tags smoke,critical
         skillforge test ./skills/my-skill --format json -o results.json
         skillforge test ./skills/my-skill --mode live --estimate-cost
+        skillforge test ./skills/my-skill --regression
+        skillforge test ./skills/my-skill --record-baselines
     """
     from skillforge.tester import (
         discover_tests,
         estimate_live_cost,
         load_test_suite,
         run_test_suite,
+        record_baselines as record_test_baselines,
+        run_regression_tests,
+        load_baselines,
+        has_baselines,
+        RegressionBaselineFile,
         TestDefinitionError,
+        SkillTestError,
     )
     from skillforge.ai import get_default_provider
 
@@ -1246,6 +1270,85 @@ tests:
         console.print(f"  [bold]Est. total cost: ${estimate['estimated_total_cost']:.4f}[/bold]")
         console.print(f"  [dim]{estimate['note']}[/dim]")
         raise typer.Exit(code=0)
+
+    # Handle baseline recording
+    if record_baselines:
+        console.print()
+        console.print("[dim]Recording baselines...[/dim]")
+
+        baselines = record_test_baselines(
+            skill=skill,
+            suite=suite,
+            baselines_path=skill_path,
+            mode=mode,  # type: ignore[arg-type]
+            provider=provider,
+            model=model,
+            overwrite=True,
+        )
+
+        console.print()
+        console.print(f"[green]✓ Recorded {len(baselines.baselines)} baseline(s)[/green]")
+        console.print(f"  Saved to: {skill_path / 'baselines.yml'}")
+        console.print()
+        console.print("[dim]Run regression tests: skillforge test ./skill --regression[/dim]")
+        raise typer.Exit(code=0)
+
+    # Handle regression testing
+    if regression:
+        if not has_baselines(skill_path):
+            console.print("[yellow]No baselines found for regression testing[/yellow]")
+            console.print()
+            console.print("[dim]Record baselines first:[/dim]")
+            console.print(f"  skillforge test {skill_path} --record-baselines")
+            raise typer.Exit(code=1)
+
+        baselines = load_baselines(skill_path)
+        console.print(f"[dim]Running regression tests (threshold: {threshold:.0%})...[/dim]")
+        console.print()
+
+        regression_result = run_regression_tests(
+            skill=skill,
+            suite=suite,
+            baselines=baselines,
+            mode=mode,  # type: ignore[arg-type]
+            provider=provider,
+            model=model,
+            threshold=threshold,
+            stop_on_failure=stop_on_failure,
+        )
+
+        # Display regression results
+        table = Table(title="Regression Test Results", show_header=True, header_style="bold")
+        table.add_column("Test", style="cyan")
+        table.add_column("Status")
+        table.add_column("Similarity", justify="right")
+        table.add_column("Details", style="dim")
+
+        for rr in regression_result.results:
+            if rr.passed:
+                status = "[green]PASS[/green]"
+            else:
+                status = "[red]FAIL[/red]"
+
+            similarity = f"{rr.similarity:.1%}"
+            details = rr.message
+
+            table.add_row(rr.test_name, status, similarity, details)
+
+        console.print(table)
+
+        console.print()
+        console.print(f"[bold]Summary:[/bold] [green]{regression_result.passed_tests} passed[/green]", end="")
+        if regression_result.failed_tests:
+            console.print(f", [red]{regression_result.failed_tests} failed[/red]", end="")
+        if regression_result.missing_baselines:
+            console.print(f", [yellow]{regression_result.missing_baselines} missing[/yellow]", end="")
+        console.print()
+
+        if regression_result.success:
+            raise typer.Exit(code=0)
+        else:
+            raise typer.Exit(code=1)
 
     # Parse filters
     filter_tags = tags.split(",") if tags else None
@@ -2070,10 +2173,22 @@ def pull(
         "-r",
         help="Pull from specific registry",
     ),
+    version: Optional[str] = typer.Option(
+        None,
+        "--version",
+        "-v",
+        help="Version or constraint (e.g., '1.2.0', '^1.0.0', '>=2.0.0')",
+    ),
+    locked: bool = typer.Option(
+        False,
+        "--locked",
+        help="Use versions from lock file",
+    ),
 ) -> None:
     """Download a skill from a registry.
 
     Downloads the skill to the specified output directory (default: ./skills/).
+    Can specify version constraints like '^1.0.0' or '>=2.0.0'.
 
     Example:
 
@@ -2081,8 +2196,24 @@ def pull(
         skillforge pull code-reviewer
         skillforge pull my-skill --output ./my-skills
         skillforge pull company-skill --registry company
+        skillforge pull code-reviewer --version "^1.0.0"
+        skillforge pull code-reviewer --locked
     """
-    from skillforge.registry import pull_skill, get_skill_info, RegistryError, SkillNotFoundError
+    from skillforge.registry import pull_skill, get_skill_info, list_skill_versions, RegistryError, SkillNotFoundError
+    from skillforge.lockfile import SkillLockFile, LockFileError
+
+    # Handle locked mode
+    if locked:
+        try:
+            lock_file = SkillLockFile.load(output)
+            locked_skill = lock_file.get_skill(skill_name)
+            if locked_skill:
+                version = locked_skill.version
+                console.print(f"[dim]Using locked version: {version}[/dim]")
+            else:
+                console.print(f"[yellow]Warning:[/yellow] Skill '{skill_name}' not in lock file")
+        except LockFileError:
+            console.print(f"[yellow]Warning:[/yellow] No lock file found in {output}")
 
     # Get skill info first
     skill = get_skill_info(skill_name, registry_name)
@@ -2093,13 +2224,20 @@ def pull(
         console.print(f"  skillforge search {skill_name}")
         raise typer.Exit(code=1)
 
+    # Show available versions if version specified
+    if version:
+        versions = list_skill_versions(skill_name, registry_name)
+        if versions:
+            console.print(f"[dim]Available versions: {', '.join(str(v) for v in versions[:5])}{'...' if len(versions) > 5 else ''}[/dim]")
+
     console.print(f"[dim]Downloading {skill_name} from {skill.registry}...[/dim]")
 
     try:
-        skill_dir = pull_skill(skill_name, output, registry_name)
+        skill_dir = pull_skill(skill_name, output, registry_name, version=version)
 
+        resolved_version = version or skill.version
         console.print()
-        console.print(f"[green]✓ Downloaded:[/green] {skill_name} v{skill.version}")
+        console.print(f"[green]✓ Downloaded:[/green] {skill_name} v{resolved_version}")
         console.print(f"  Location: {skill_dir}")
         console.print()
         console.print("[dim]Next steps:[/dim]")
@@ -2113,6 +2251,317 @@ def pull(
     except RegistryError as e:
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(code=1)
+
+
+# =============================================================================
+# Version Commands
+# =============================================================================
+
+version_app = typer.Typer(
+    help="Manage skill versions",
+    no_args_is_help=True,
+)
+app.add_typer(version_app, name="version")
+
+
+@version_app.command("show")
+def version_show(
+    skill_path: Path = typer.Argument(..., help="Path to the skill directory"),
+) -> None:
+    """Show the version of a skill.
+
+    Example:
+
+    \b
+        skillforge version show ./skills/my-skill
+    """
+    from skillforge.skill import Skill, SkillParseError
+
+    skill_path = Path(skill_path)
+
+    try:
+        skill = Skill.from_directory(skill_path)
+    except SkillParseError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=1)
+
+    console.print()
+    console.print(f"[bold]Skill:[/bold] {skill.name}")
+    if skill.version:
+        console.print(f"[bold]Version:[/bold] {skill.version}")
+    else:
+        console.print(f"[bold]Version:[/bold] [dim]not specified[/dim]")
+        console.print()
+        console.print("[dim]Add a version with: skillforge version bump ./skills/my-skill --set 1.0.0[/dim]")
+
+
+@version_app.command("bump")
+def version_bump(
+    skill_path: Path = typer.Argument(..., help="Path to the skill directory"),
+    major: bool = typer.Option(
+        False,
+        "--major",
+        help="Bump major version (x.0.0)",
+    ),
+    minor: bool = typer.Option(
+        False,
+        "--minor",
+        help="Bump minor version (0.x.0)",
+    ),
+    patch: bool = typer.Option(
+        False,
+        "--patch",
+        help="Bump patch version (0.0.x) - default",
+    ),
+    set_version: Optional[str] = typer.Option(
+        None,
+        "--set",
+        help="Set to a specific version (e.g., 1.0.0)",
+    ),
+) -> None:
+    """Bump the version of a skill.
+
+    By default bumps the patch version. Use --major, --minor, or --set
+    for other version changes.
+
+    Example:
+
+    \b
+        skillforge version bump ./skills/my-skill
+        skillforge version bump ./skills/my-skill --minor
+        skillforge version bump ./skills/my-skill --major
+        skillforge version bump ./skills/my-skill --set 2.0.0
+    """
+    from skillforge.skill import Skill, SkillParseError
+    from skillforge.versioning import SkillVersion, parse_version, VersionParseError
+
+    skill_path = Path(skill_path)
+
+    try:
+        skill = Skill.from_directory(skill_path)
+    except SkillParseError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=1)
+
+    old_version = skill.version
+
+    if set_version:
+        # Set to specific version
+        try:
+            parsed = parse_version(set_version)
+            new_version = str(parsed)
+        except VersionParseError as e:
+            console.print(f"[red]Error:[/red] Invalid version format: {e}")
+            raise typer.Exit(code=1)
+    else:
+        # Bump existing version
+        if not old_version:
+            old_version = "0.0.0"
+
+        try:
+            current = parse_version(old_version)
+        except VersionParseError:
+            console.print(f"[yellow]Warning:[/yellow] Current version '{old_version}' invalid, starting from 0.0.0")
+            current = SkillVersion(0, 0, 0)
+
+        if major:
+            new_version = str(current.bump("major"))
+        elif minor:
+            new_version = str(current.bump("minor"))
+        else:
+            # Default to patch
+            new_version = str(current.bump("patch"))
+
+    # Update the skill
+    skill.version = new_version
+
+    # Write back to SKILL.md
+    skill_md_path = skill_path / "SKILL.md"
+    skill_md_path.write_text(skill.to_skill_md())
+
+    console.print()
+    if old_version:
+        console.print(f"[green]✓ Version bumped:[/green] {old_version} → {new_version}")
+    else:
+        console.print(f"[green]✓ Version set:[/green] {new_version}")
+    console.print(f"  Updated: {skill_md_path}")
+
+
+@version_app.command("list")
+def version_list(
+    skill_name: str = typer.Argument(..., help="Skill name to look up in registries"),
+    registry_name: Optional[str] = typer.Option(
+        None,
+        "--registry",
+        "-r",
+        help="Search only in this registry",
+    ),
+) -> None:
+    """List available versions of a skill from registries.
+
+    Example:
+
+    \b
+        skillforge version list code-reviewer
+        skillforge version list my-skill --registry company
+    """
+    from skillforge.registry import list_skill_versions, get_skill_info
+
+    skill = get_skill_info(skill_name, registry_name)
+    if not skill:
+        console.print(f"[red]Error:[/red] Skill '{skill_name}' not found in registries")
+        raise typer.Exit(code=1)
+
+    versions = list_skill_versions(skill_name, registry_name)
+
+    console.print()
+    console.print(f"[bold]Skill:[/bold] {skill_name}")
+    console.print(f"[bold]Registry:[/bold] {skill.registry}")
+    console.print()
+
+    if versions:
+        console.print("[bold]Available Versions:[/bold]")
+        for v in versions:
+            if str(v) == skill.version:
+                console.print(f"  [green]{v}[/green] (latest)")
+            else:
+                console.print(f"  {v}")
+    else:
+        console.print(f"[dim]No version info available (latest: {skill.version})[/dim]")
+
+    console.print()
+    console.print(f"[dim]Pull specific version: skillforge pull {skill_name} --version <version>[/dim]")
+
+
+# =============================================================================
+# Lock File Commands
+# =============================================================================
+
+
+@app.command("lock")
+def lock_cmd(
+    skills_dir: Path = typer.Argument(
+        Path("./skills"),
+        help="Directory containing skills to lock",
+    ),
+    check: bool = typer.Option(
+        False,
+        "--check",
+        help="Verify existing lock file instead of generating",
+    ),
+    output: Optional[Path] = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Output path for lock file",
+    ),
+) -> None:
+    """Generate or verify a lock file for reproducible installations.
+
+    Creates a skillforge.lock file that pins exact versions and checksums
+    for all skills, ensuring reproducible installations.
+
+    Example:
+
+    \b
+        skillforge lock ./skills
+        skillforge lock ./skills --check
+        skillforge lock ./skills -o custom.lock
+    """
+    from skillforge.lockfile import (
+        SkillLockFile,
+        generate_lock_file,
+        verify_against_lock,
+        LockFileError,
+        LOCK_FILE_NAME,
+    )
+
+    skills_dir = Path(skills_dir)
+
+    if not skills_dir.exists():
+        console.print(f"[red]Error:[/red] Directory not found: {skills_dir}")
+        raise typer.Exit(code=1)
+
+    if check:
+        # Verify mode
+        lock_path = output or (skills_dir / LOCK_FILE_NAME)
+
+        try:
+            lock_file = SkillLockFile.load(lock_path)
+        except LockFileError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(code=1)
+
+        console.print(f"[dim]Verifying against: {lock_path}[/dim]")
+        console.print()
+
+        result = verify_against_lock(skills_dir, lock_file)
+
+        # Show results
+        if result.matched:
+            console.print("[bold]Matched:[/bold]")
+            for name in result.matched:
+                console.print(f"  [green]✓[/green] {name}")
+
+        if result.mismatched:
+            console.print()
+            console.print("[bold red]Mismatched (content changed):[/bold red]")
+            for name in result.mismatched:
+                console.print(f"  [red]✗[/red] {name}")
+
+        if result.missing:
+            console.print()
+            console.print("[bold yellow]Missing:[/bold yellow]")
+            for name in result.missing:
+                console.print(f"  [yellow]?[/yellow] {name}")
+
+        if result.unlocked:
+            console.print()
+            console.print("[bold]Unlocked (not in lock file):[/bold]")
+            for name in result.unlocked:
+                console.print(f"  [dim]-[/dim] {name}")
+
+        console.print()
+        if result.verified:
+            console.print("[green]✓ Lock file verified[/green]")
+        else:
+            console.print("[red]✗ Lock file verification failed[/red]")
+            raise typer.Exit(code=1)
+
+    else:
+        # Generate mode
+        console.print(f"[dim]Scanning skills in: {skills_dir}[/dim]")
+
+        lock_file = generate_lock_file(skills_dir)
+
+        if not lock_file.skills:
+            console.print("[yellow]No skills found to lock[/yellow]")
+            return
+
+        # Save lock file
+        lock_path = output or (skills_dir / LOCK_FILE_NAME)
+        lock_file.save(lock_path)
+
+        console.print()
+        console.print(f"[green]✓ Lock file created:[/green] {lock_path}")
+        console.print()
+
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("Skill", style="cyan")
+        table.add_column("Version")
+        table.add_column("Checksum", style="dim")
+
+        for name, locked in sorted(lock_file.skills.items()):
+            # Truncate checksum for display
+            checksum_display = locked.checksum[:20] + "..."
+            table.add_row(name, locked.version, checksum_display)
+
+        console.print(table)
+        console.print()
+        console.print(f"[dim]Locked {len(lock_file.skills)} skill(s)[/dim]")
+        console.print()
+        console.print("[dim]Verify with: skillforge lock --check[/dim]")
+        console.print("[dim]Install locked: skillforge pull <skill> --locked[/dim]")
 
 
 if __name__ == "__main__":

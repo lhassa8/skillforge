@@ -14,6 +14,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from skillforge.versioning import (
+    SkillVersion,
+    VersionConstraint,
+    VersionParseError,
+    parse_constraint,
+    parse_version,
+)
+
 
 # Config stored at ~/.config/skillforge/registries.json
 REGISTRIES_CONFIG = Path.home() / ".config" / "skillforge" / "registries.json"
@@ -25,12 +33,62 @@ class SkillEntry:
 
     name: str
     description: str
-    version: str
+    version: str  # Latest/default version
     repo: str
     author: str = ""
     tags: list[str] = field(default_factory=list)
     updated: str = ""
     registry: str = ""  # Which registry this came from
+    versions: list[str] = field(default_factory=list)  # All available versions
+
+    def get_latest_version(self) -> Optional[SkillVersion]:
+        """Get the latest version as SkillVersion object."""
+        if not self.version:
+            return None
+        try:
+            return parse_version(self.version)
+        except VersionParseError:
+            return None
+
+    def get_available_versions(self) -> list[SkillVersion]:
+        """Get all available versions as SkillVersion objects, sorted descending."""
+        versions = []
+        for v in self.versions:
+            try:
+                versions.append(parse_version(v))
+            except VersionParseError:
+                continue
+        # Also include the main version if not in list
+        if self.version:
+            try:
+                main_ver = parse_version(self.version)
+                if main_ver not in versions:
+                    versions.append(main_ver)
+            except VersionParseError:
+                pass
+        # Sort descending (newest first)
+        versions.sort(reverse=True)
+        return versions
+
+    def find_matching_version(self, constraint: str) -> Optional[SkillVersion]:
+        """Find the best version matching a constraint.
+
+        Args:
+            constraint: Version constraint string (e.g., "^1.0.0", ">=2.0.0")
+
+        Returns:
+            Best matching version, or None if no match
+        """
+        try:
+            vc = parse_constraint(constraint)
+        except VersionParseError:
+            return None
+
+        available = self.get_available_versions()
+        for version in available:
+            if vc.satisfies(version):
+                return version
+        return None
 
 
 @dataclass
@@ -183,6 +241,7 @@ def add_registry(url: str, name: Optional[str] = None) -> Registry:
                 tags=skill_data.get("tags", []),
                 updated=skill_data.get("updated", ""),
                 registry=registry_name,
+                versions=skill_data.get("versions", []),
             )
         )
 
@@ -217,6 +276,7 @@ def add_registry(url: str, name: Optional[str] = None) -> Registry:
                 "author": s.author,
                 "tags": s.tags,
                 "updated": s.updated,
+                "versions": s.versions,
             }
             for s in skills
         ],
@@ -276,6 +336,7 @@ def list_registries() -> list[Registry]:
                     tags=skill_data.get("tags", []),
                     updated=skill_data.get("updated", ""),
                     registry=name,
+                    versions=skill_data.get("versions", []),
                 )
             )
 
@@ -322,6 +383,7 @@ def update_registries() -> list[Registry]:
                         tags=skill_data.get("tags", []),
                         updated=skill_data.get("updated", ""),
                         registry=name,
+                        versions=skill_data.get("versions", []),
                     )
                 )
 
@@ -337,6 +399,7 @@ def update_registries() -> list[Registry]:
                         "author": s.author,
                         "tags": s.tags,
                         "updated": s.updated,
+                        "versions": s.versions,
                     }
                     for s in skills
                 ],
@@ -438,10 +501,50 @@ def get_skill_info(
     return None
 
 
+def list_skill_versions(
+    skill_name: str, registry: Optional[str] = None
+) -> list[SkillVersion]:
+    """List all available versions for a skill.
+
+    Args:
+        skill_name: Skill name to look up
+        registry: Optional registry to search in
+
+    Returns:
+        List of SkillVersion objects, sorted newest first
+    """
+    skill = get_skill_info(skill_name, registry)
+    if not skill:
+        return []
+    return skill.get_available_versions()
+
+
+def find_compatible_version(
+    skill_name: str,
+    constraint: str,
+    registry: Optional[str] = None,
+) -> Optional[SkillVersion]:
+    """Find the best version matching a constraint.
+
+    Args:
+        skill_name: Skill name to look up
+        constraint: Version constraint (e.g., "^1.0.0", ">=2.0.0")
+        registry: Optional registry to search in
+
+    Returns:
+        Best matching version, or None if no match
+    """
+    skill = get_skill_info(skill_name, registry)
+    if not skill:
+        return None
+    return skill.find_matching_version(constraint)
+
+
 def pull_skill(
     skill_name: str,
     output_dir: Path = Path("./skills"),
     registry: Optional[str] = None,
+    version: Optional[str] = None,
 ) -> Path:
     """Download a skill from a registry.
 
@@ -449,17 +552,47 @@ def pull_skill(
         skill_name: Name of the skill to download
         output_dir: Directory to download to
         registry: Optional specific registry to pull from
+        version: Optional version or constraint (e.g., "1.2.0", "^1.0.0", ">=2.0.0")
 
     Returns:
         Path to the downloaded skill directory
 
     Raises:
         SkillNotFoundError: If skill not found
-        RegistryError: If download fails
+        RegistryError: If download fails or no matching version
     """
     skill = get_skill_info(skill_name, registry)
     if not skill:
         raise SkillNotFoundError(f"Skill '{skill_name}' not found in any registry")
+
+    # Resolve version if specified
+    resolved_version: Optional[str] = None
+    if version:
+        # Try as exact version first
+        try:
+            exact_ver = parse_version(version)
+            available = skill.get_available_versions()
+            if exact_ver in available:
+                resolved_version = str(exact_ver)
+            else:
+                # Maybe it's a constraint
+                matched = skill.find_matching_version(version)
+                if matched:
+                    resolved_version = str(matched)
+                else:
+                    raise RegistryError(
+                        f"No version matching '{version}' found for '{skill_name}'. "
+                        f"Available: {', '.join(str(v) for v in available) or skill.version}"
+                    )
+        except VersionParseError:
+            # Try as constraint
+            matched = skill.find_matching_version(version)
+            if matched:
+                resolved_version = str(matched)
+            else:
+                raise RegistryError(
+                    f"Invalid version or no matching version: '{version}'"
+                )
 
     if not skill.repo:
         raise RegistryError(f"Skill '{skill_name}' has no repository URL")
