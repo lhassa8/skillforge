@@ -1486,12 +1486,36 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
+## Examples & Tutorials
+
+Get started quickly with our examples and step-by-step tutorials:
+
+- [Examples](examples/) - Sample skills demonstrating various features
+- [Tutorial 1: Getting Started](examples/tutorials/01-getting-started.md) - Create your first skill
+- [Tutorial 2: Testing Skills](examples/tutorials/02-testing-skills.md) - Write and run tests
+- [Tutorial 3: Security & Governance](examples/tutorials/03-security-governance.md) - Secure your skills
+- [Tutorial 4: Multi-Platform Publishing](examples/tutorials/04-multi-platform.md) - Deploy everywhere
+- [Tutorial 5: MCP Integration](examples/tutorials/05-mcp-integration.md) - Expose skills as MCP tools
+
+---
+
 ## Resources
 
+**Documentation:**
+- [Examples & Tutorials](examples/)
+- [Changelog](CHANGELOG.md)
+- [Roadmap](ROADMAP.md)
+- [Contributing Guide](CONTRIBUTING.md)
+
+**External:**
 - [Anthropic Agent Skills Documentation](https://docs.anthropic.com/en/docs/agents-and-tools/agent-skills)
 - [Model Context Protocol (MCP)](https://modelcontextprotocol.io/)
-- [Changelog](CHANGELOG.md)
+
+**Community:**
+- [GitHub Discussions](https://github.com/lhassa8/skillforge/discussions)
 - [Issue Tracker](https://github.com/lhassa8/skillforge/issues)
+- [Security Policy](SECURITY.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
 
 ---
 
@@ -1500,6 +1524,8 @@ MIT License - see [LICENSE](LICENSE) for details.
 Current version: **1.0.0**
 
 SkillForge follows [Semantic Versioning](https://semver.org/). The public API (exported from `skillforge.api`) is stable and will not have breaking changes in minor versions.
+
+See our [Roadmap](ROADMAP.md) for upcoming features.
 
 ---
 

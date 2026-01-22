@@ -4,7 +4,7 @@ Thank you for your interest in contributing to SkillForge! This document provide
 
 ## Code of Conduct
 
-Please be respectful and constructive in all interactions. We're building something together.
+Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md). Be respectful and constructive in all interactions.
 
 ## Getting Started
 
@@ -164,7 +164,14 @@ skillforge/
 │   ├── test_analytics.py
 │   ├── test_config.py
 │   └── test_migrate.py
-└── skills/                  # Example/generated skills
+├── examples/                # Examples and tutorials
+│   ├── skills/             # Example skills
+│   │   ├── code-reviewer/
+│   │   ├── git-commit/
+│   │   ├── api-documenter/
+│   │   └── data-analyst/
+│   └── tutorials/          # Step-by-step guides
+└── skills/                  # Generated skills (gitignored)
 ```
 
 ## Testing Guidelines
@@ -195,7 +202,9 @@ class TestFeatureName:
 - Update README.md for user-facing features
 - Add docstrings to public functions
 - Include examples in docstrings
-- Update CHANGELOG.md
+- Update CHANGELOG.md for releases
+- Update ROADMAP.md for planned features
+- Add tutorials in `examples/tutorials/` for complex features
 
 ## Release Process
 
