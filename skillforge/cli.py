@@ -2983,5 +2983,767 @@ def mcp_config(
         raise typer.Exit(code=1)
 
 
+# =============================================================================
+# Security Commands (v0.11.0)
+# =============================================================================
+
+security_app = typer.Typer(
+    name="security",
+    help="Security scanning and vulnerability detection.",
+    no_args_is_help=True,
+)
+app.add_typer(security_app, name="security")
+
+
+@security_app.command("scan")
+def security_scan(
+    skill_path: Path = typer.Argument(..., help="Path to skill directory"),
+    min_severity: str = typer.Option(
+        "info",
+        "--min-severity",
+        "-s",
+        help="Minimum severity to report (critical, high, medium, low, info)",
+    ),
+    output_format: str = typer.Option(
+        "text",
+        "--format",
+        "-f",
+        help="Output format (text, json)",
+    ),
+    exclude: Optional[list[str]] = typer.Option(
+        None,
+        "--exclude",
+        "-e",
+        help="Pattern names to exclude",
+    ),
+) -> None:
+    """Scan a skill for security vulnerabilities.
+
+    Checks skill content for prompt injection, credential exposure,
+    data exfiltration risks, and other security issues.
+
+    Example:
+
+    \b
+        skillforge security scan ./skills/my-skill
+        skillforge security scan ./skills/my-skill --min-severity medium
+        skillforge security scan ./skills/my-skill --format json
+    """
+    from skillforge.security import scan_skill, Severity, get_risk_level, SecurityScanError
+
+    # Parse severity
+    try:
+        severity = Severity(min_severity.lower())
+    except ValueError:
+        console.print(f"[red]Invalid severity:[/red] {min_severity}")
+        console.print("[dim]Valid options: critical, high, medium, low, info[/dim]")
+        raise typer.Exit(code=1)
+
+    try:
+        result = scan_skill(
+            skill_path,
+            min_severity=severity,
+            exclude_patterns=exclude or [],
+        )
+
+        if output_format == "json":
+            console.print(result.to_json())
+            raise typer.Exit(code=0 if result.passed else 1)
+
+        # Text output
+        console.print()
+        console.print(f"[bold]Security Scan: {result.skill_name}[/bold]")
+        console.print()
+
+        # Summary
+        risk_level = get_risk_level(result.risk_score)
+        risk_color = {
+            "none": "green",
+            "low": "green",
+            "medium": "yellow",
+            "high": "red",
+            "critical": "red bold",
+        }.get(risk_level, "white")
+
+        console.print(f"Risk Score: [{risk_color}]{result.risk_score}/100 ({risk_level})[/{risk_color}]")
+        console.print(f"Scan Duration: {result.scan_duration_ms:.1f}ms")
+        console.print()
+
+        # Findings summary
+        console.print("[bold]Summary:[/bold]")
+        console.print(f"  Critical: {result.critical_count}")
+        console.print(f"  High: {result.high_count}")
+        console.print(f"  Medium: {result.medium_count}")
+        console.print(f"  Low: {result.low_count}")
+        console.print(f"  Info: {result.info_count}")
+        console.print()
+
+        # Findings details
+        if result.findings:
+            console.print("[bold]Findings:[/bold]")
+            console.print()
+
+            for finding in result.findings:
+                severity_color = {
+                    "critical": "red bold",
+                    "high": "red",
+                    "medium": "yellow",
+                    "low": "blue",
+                    "info": "dim",
+                }.get(finding.severity.value, "white")
+
+                console.print(f"  [{severity_color}]{finding.severity.value.upper()}[/{severity_color}] {finding.description}")
+                console.print(f"    [dim]Pattern:[/dim] {finding.pattern_name}")
+                if finding.line_number:
+                    console.print(f"    [dim]Line:[/dim] {finding.line_number}")
+                console.print(f"    [dim]Matched:[/dim] {finding.matched_text[:60]}{'...' if len(finding.matched_text) > 60 else ''}")
+                console.print(f"    [dim]Fix:[/dim] {finding.recommendation}")
+                console.print()
+
+        # Result
+        if result.passed:
+            console.print("[green]✓ Security scan passed[/green]")
+        else:
+            console.print("[red]✗ Security scan failed[/red]")
+            raise typer.Exit(code=1)
+
+    except SecurityScanError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=1)
+
+
+@security_app.command("patterns")
+def security_patterns(
+    severity: Optional[str] = typer.Option(
+        None,
+        "--severity",
+        "-s",
+        help="Filter by severity",
+    ),
+    issue_type: Optional[str] = typer.Option(
+        None,
+        "--type",
+        "-t",
+        help="Filter by issue type",
+    ),
+) -> None:
+    """List available security patterns.
+
+    Shows all patterns used for security scanning.
+
+    Example:
+
+    \b
+        skillforge security patterns
+        skillforge security patterns --severity critical
+        skillforge security patterns --type prompt_injection
+    """
+    from skillforge.security import SECURITY_PATTERNS, Severity, SecurityIssueType
+
+    patterns = SECURITY_PATTERNS
+
+    # Filter by severity
+    if severity:
+        try:
+            sev = Severity(severity.lower())
+            patterns = [p for p in patterns if p.severity == sev]
+        except ValueError:
+            console.print(f"[red]Invalid severity:[/red] {severity}")
+            raise typer.Exit(code=1)
+
+    # Filter by type
+    if issue_type:
+        try:
+            itype = SecurityIssueType(issue_type.lower())
+            patterns = [p for p in patterns if p.issue_type == itype]
+        except ValueError:
+            console.print(f"[red]Invalid issue type:[/red] {issue_type}")
+            raise typer.Exit(code=1)
+
+    if not patterns:
+        console.print("[yellow]No patterns match the filters[/yellow]")
+        return
+
+    console.print()
+    console.print(f"[bold]Security Patterns ({len(patterns)}):[/bold]")
+    console.print()
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Name", style="cyan")
+    table.add_column("Severity")
+    table.add_column("Type", style="dim")
+    table.add_column("Description")
+
+    for p in patterns:
+        severity_color = {
+            "critical": "red",
+            "high": "red",
+            "medium": "yellow",
+            "low": "blue",
+            "info": "dim",
+        }.get(p.severity.value, "white")
+
+        table.add_row(
+            p.name,
+            f"[{severity_color}]{p.severity.value}[/{severity_color}]",
+            p.issue_type.value,
+            p.description[:40] + "..." if len(p.description) > 40 else p.description,
+        )
+
+    console.print(table)
+
+
+# =============================================================================
+# Governance Commands (v0.11.0)
+# =============================================================================
+
+governance_app = typer.Typer(
+    name="governance",
+    help="Enterprise governance and policy management.",
+    no_args_is_help=True,
+)
+app.add_typer(governance_app, name="governance")
+
+
+@governance_app.command("trust")
+def governance_trust(
+    skill_path: Path = typer.Argument(..., help="Path to skill directory"),
+    set_tier: Optional[str] = typer.Option(
+        None,
+        "--set",
+        "-s",
+        help="Set trust tier (untrusted, community, verified, enterprise)",
+    ),
+    verified_by: Optional[str] = typer.Option(
+        None,
+        "--by",
+        "-b",
+        help="Who is setting the trust tier",
+    ),
+) -> None:
+    """View or set trust tier for a skill.
+
+    Trust tiers indicate the level of verification and trust for a skill:
+    - untrusted: Unknown source, not verified
+    - community: Community-contributed, basic checks
+    - verified: Verified publisher, security scanned
+    - enterprise: Enterprise-approved, full audit
+
+    Example:
+
+    \b
+        skillforge governance trust ./skills/my-skill
+        skillforge governance trust ./skills/my-skill --set verified --by admin
+    """
+    from skillforge.governance import (
+        TrustTier,
+        get_trust_metadata,
+        set_trust_tier,
+        get_trust_tier_description,
+        log_trust_changed,
+    )
+
+    skill_path = Path(skill_path)
+
+    if not skill_path.exists():
+        console.print(f"[red]Skill not found:[/red] {skill_path}")
+        raise typer.Exit(code=1)
+
+    if set_tier:
+        # Set trust tier
+        try:
+            tier = TrustTier[set_tier.upper()]
+        except KeyError:
+            console.print(f"[red]Invalid trust tier:[/red] {set_tier}")
+            console.print("[dim]Valid tiers: untrusted, community, verified, enterprise[/dim]")
+            raise typer.Exit(code=1)
+
+        old_metadata = get_trust_metadata(skill_path)
+        old_tier = old_metadata.tier.name.lower()
+
+        metadata = set_trust_tier(skill_path, tier, verified_by=verified_by)
+
+        # Log the change
+        log_trust_changed(
+            skill_name=skill_path.name,
+            old_tier=old_tier,
+            new_tier=tier.name.lower(),
+            actor=verified_by,
+        )
+
+        console.print()
+        console.print(f"[green]✓ Trust tier set to:[/green] {tier.name.lower()}")
+        if verified_by:
+            console.print(f"[dim]Verified by: {verified_by}[/dim]")
+    else:
+        # Show trust tier
+        metadata = get_trust_metadata(skill_path)
+
+        console.print()
+        console.print(f"[bold]Trust Status: {skill_path.name}[/bold]")
+        console.print()
+
+        tier_color = {
+            TrustTier.UNTRUSTED: "red",
+            TrustTier.COMMUNITY: "yellow",
+            TrustTier.VERIFIED: "green",
+            TrustTier.ENTERPRISE: "cyan bold",
+        }.get(metadata.tier, "white")
+
+        console.print(f"Tier: [{tier_color}]{metadata.tier.name.lower()}[/{tier_color}]")
+        console.print(f"Description: {get_trust_tier_description(metadata.tier)}")
+
+        if metadata.verified_at:
+            console.print(f"Verified: {metadata.verified_at.strftime('%Y-%m-%d %H:%M')}")
+        if metadata.verified_by:
+            console.print(f"Verified by: {metadata.verified_by}")
+        if metadata.security_scan_passed is not None:
+            status = "[green]passed[/green]" if metadata.security_scan_passed else "[red]failed[/red]"
+            console.print(f"Security scan: {status}")
+        if metadata.approval_id:
+            console.print(f"Approval ID: {metadata.approval_id}")
+
+
+@governance_app.command("policy")
+def governance_policy(
+    action: str = typer.Argument(..., help="Action: list, show, create, delete"),
+    name: Optional[str] = typer.Argument(None, help="Policy name"),
+    description: str = typer.Option("", "--description", "-d", help="Policy description"),
+    min_trust: str = typer.Option("untrusted", "--min-trust", help="Minimum trust tier"),
+    max_risk: int = typer.Option(100, "--max-risk", help="Maximum risk score"),
+    require_scan: bool = typer.Option(False, "--require-scan", help="Require security scan"),
+    require_approval: bool = typer.Option(False, "--require-approval", help="Require approval"),
+) -> None:
+    """Manage governance policies.
+
+    Policies control which skills can be used in different environments.
+
+    Actions:
+    - list: Show all policies
+    - show <name>: Show policy details
+    - create <name>: Create a new policy
+    - delete <name>: Delete a custom policy
+
+    Example:
+
+    \b
+        skillforge governance policy list
+        skillforge governance policy show production
+        skillforge governance policy create staging --min-trust community --max-risk 50
+        skillforge governance policy delete my-policy
+    """
+    from skillforge.governance import (
+        TrustTier,
+        TrustPolicy,
+        list_policies,
+        load_policy,
+        save_policy,
+        delete_policy,
+        PolicyError,
+        BUILTIN_POLICIES,
+    )
+
+    if action == "list":
+        policies = list_policies()
+
+        console.print()
+        console.print(f"[bold]Governance Policies ({len(policies)}):[/bold]")
+        console.print()
+
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("Name", style="cyan")
+        table.add_column("Type", style="dim")
+        table.add_column("Min Trust")
+        table.add_column("Max Risk")
+        table.add_column("Scan")
+        table.add_column("Approval")
+
+        for p in policies:
+            policy_type = "built-in" if p.name in BUILTIN_POLICIES else "custom"
+            table.add_row(
+                p.name,
+                policy_type,
+                p.min_trust_tier.name.lower(),
+                str(p.max_risk_score),
+                "yes" if p.require_security_scan else "no",
+                "yes" if p.approval_required else "no",
+            )
+
+        console.print(table)
+
+    elif action == "show":
+        if not name:
+            console.print("[red]Policy name required[/red]")
+            raise typer.Exit(code=1)
+
+        try:
+            policy = load_policy(name)
+        except PolicyError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(code=1)
+
+        console.print()
+        console.print(f"[bold]Policy: {policy.name}[/bold]")
+        console.print()
+        console.print(f"Description: {policy.description or '(none)'}")
+        console.print(f"Min Trust Tier: {policy.min_trust_tier.name.lower()}")
+        console.print(f"Max Risk Score: {policy.max_risk_score}")
+        console.print(f"Require Security Scan: {'yes' if policy.require_security_scan else 'no'}")
+        console.print(f"Require Approval: {'yes' if policy.approval_required else 'no'}")
+
+        if policy.min_severity_block:
+            console.print(f"Block Severity: {policy.min_severity_block.value}+")
+        if policy.blocked_patterns:
+            console.print(f"Blocked Patterns: {', '.join(policy.blocked_patterns)}")
+        if policy.allowed_sources:
+            console.print(f"Allowed Sources: {', '.join(policy.allowed_sources)}")
+
+    elif action == "create":
+        if not name:
+            console.print("[red]Policy name required[/red]")
+            raise typer.Exit(code=1)
+
+        if name in BUILTIN_POLICIES:
+            console.print(f"[red]Cannot override built-in policy:[/red] {name}")
+            raise typer.Exit(code=1)
+
+        try:
+            tier = TrustTier[min_trust.upper()]
+        except KeyError:
+            console.print(f"[red]Invalid trust tier:[/red] {min_trust}")
+            raise typer.Exit(code=1)
+
+        policy = TrustPolicy(
+            name=name,
+            description=description,
+            min_trust_tier=tier,
+            max_risk_score=max_risk,
+            require_security_scan=require_scan,
+            approval_required=require_approval,
+        )
+
+        save_policy(policy)
+        console.print(f"[green]✓ Created policy:[/green] {name}")
+
+    elif action == "delete":
+        if not name:
+            console.print("[red]Policy name required[/red]")
+            raise typer.Exit(code=1)
+
+        try:
+            if delete_policy(name):
+                console.print(f"[green]✓ Deleted policy:[/green] {name}")
+            else:
+                console.print(f"[yellow]Policy not found:[/yellow] {name}")
+        except PolicyError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(code=1)
+
+    else:
+        console.print(f"[red]Unknown action:[/red] {action}")
+        console.print("[dim]Valid actions: list, show, create, delete[/dim]")
+        raise typer.Exit(code=1)
+
+
+@governance_app.command("check")
+def governance_check(
+    skill_path: Path = typer.Argument(..., help="Path to skill directory"),
+    policy_name: str = typer.Option(
+        "development",
+        "--policy",
+        "-p",
+        help="Policy to check against",
+    ),
+    output_format: str = typer.Option(
+        "text",
+        "--format",
+        "-f",
+        help="Output format (text, json)",
+    ),
+) -> None:
+    """Check a skill against a governance policy.
+
+    Verifies that a skill meets the requirements of a policy.
+
+    Example:
+
+    \b
+        skillforge governance check ./skills/my-skill
+        skillforge governance check ./skills/my-skill --policy production
+        skillforge governance check ./skills/my-skill --format json
+    """
+    from skillforge.governance import (
+        check_policy,
+        load_policy,
+        log_policy_check,
+        PolicyError,
+    )
+    import json
+
+    try:
+        policy = load_policy(policy_name)
+    except PolicyError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=1)
+
+    result = check_policy(skill_path, policy)
+
+    # Log the check
+    log_policy_check(
+        skill_name=result.skill_name,
+        policy_name=policy_name,
+        passed=result.passed,
+        violations=result.violations,
+    )
+
+    if output_format == "json":
+        console.print(json.dumps(result.to_dict(), indent=2))
+        raise typer.Exit(code=0 if result.passed else 1)
+
+    console.print()
+    console.print(f"[bold]Policy Check: {result.skill_name}[/bold]")
+    console.print(f"Policy: {policy_name}")
+    console.print()
+
+    if result.violations:
+        console.print("[red]Violations:[/red]")
+        for v in result.violations:
+            console.print(f"  [red]✗[/red] {v}")
+        console.print()
+
+    if result.warnings:
+        console.print("[yellow]Warnings:[/yellow]")
+        for w in result.warnings:
+            console.print(f"  [yellow]![/yellow] {w}")
+        console.print()
+
+    if result.passed:
+        console.print("[green]✓ Skill meets policy requirements[/green]")
+    else:
+        console.print("[red]✗ Skill violates policy[/red]")
+        raise typer.Exit(code=1)
+
+
+@governance_app.command("audit")
+def governance_audit(
+    skill_name: Optional[str] = typer.Option(
+        None,
+        "--skill",
+        "-s",
+        help="Filter by skill name",
+    ),
+    from_date: Optional[str] = typer.Option(
+        None,
+        "--from",
+        help="Start date (YYYY-MM-DD)",
+    ),
+    to_date: Optional[str] = typer.Option(
+        None,
+        "--to",
+        help="End date (YYYY-MM-DD)",
+    ),
+    limit: int = typer.Option(
+        50,
+        "--limit",
+        "-n",
+        help="Maximum events to show",
+    ),
+    summary: bool = typer.Option(
+        False,
+        "--summary",
+        help="Show summary instead of events",
+    ),
+) -> None:
+    """View audit trail for skills.
+
+    Shows the history of skill lifecycle events including creation,
+    modification, security scans, and policy checks.
+
+    Example:
+
+    \b
+        skillforge governance audit
+        skillforge governance audit --skill my-skill
+        skillforge governance audit --from 2026-01-01 --to 2026-01-31
+        skillforge governance audit --summary
+    """
+    from datetime import datetime
+    from skillforge.governance import (
+        AuditQuery,
+        query_events,
+        get_audit_summary,
+    )
+
+    # Parse dates
+    from_dt = None
+    to_dt = None
+
+    if from_date:
+        try:
+            from_dt = datetime.strptime(from_date, "%Y-%m-%d")
+        except ValueError:
+            console.print(f"[red]Invalid date format:[/red] {from_date}")
+            console.print("[dim]Use YYYY-MM-DD format[/dim]")
+            raise typer.Exit(code=1)
+
+    if to_date:
+        try:
+            to_dt = datetime.strptime(to_date, "%Y-%m-%d")
+        except ValueError:
+            console.print(f"[red]Invalid date format:[/red] {to_date}")
+            raise typer.Exit(code=1)
+
+    if summary:
+        # Show summary
+        audit_summary = get_audit_summary(from_dt, to_dt)
+
+        console.print()
+        console.print("[bold]Audit Summary[/bold]")
+        console.print()
+        console.print(f"Total Events: {audit_summary.total_events}")
+
+        if audit_summary.date_range[0]:
+            console.print(f"Date Range: {audit_summary.date_range[0].strftime('%Y-%m-%d')} to {audit_summary.date_range[1].strftime('%Y-%m-%d')}")
+
+        if audit_summary.events_by_type:
+            console.print()
+            console.print("[bold]By Event Type:[/bold]")
+            for event_type, count in sorted(audit_summary.events_by_type.items(), key=lambda x: -x[1]):
+                console.print(f"  {event_type}: {count}")
+
+        if audit_summary.events_by_skill:
+            console.print()
+            console.print("[bold]By Skill:[/bold]")
+            for name, count in sorted(audit_summary.events_by_skill.items(), key=lambda x: -x[1])[:10]:
+                console.print(f"  {name}: {count}")
+
+        return
+
+    # Query events
+    query = AuditQuery(
+        skill_name=skill_name,
+        from_date=from_dt,
+        to_date=to_dt,
+        limit=limit,
+    )
+    events = query_events(query)
+
+    if not events:
+        console.print("[dim]No audit events found[/dim]")
+        return
+
+    console.print()
+    console.print(f"[bold]Audit Events ({len(events)}):[/bold]")
+    console.print()
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Timestamp", style="dim")
+    table.add_column("Event", style="cyan")
+    table.add_column("Skill")
+    table.add_column("Actor")
+    table.add_column("Details", style="dim")
+
+    for event in events:
+        details = ""
+        if event.details:
+            detail_items = [f"{k}={v}" for k, v in list(event.details.items())[:2]]
+            details = ", ".join(detail_items)[:30]
+
+        table.add_row(
+            event.timestamp.strftime("%Y-%m-%d %H:%M"),
+            event.event_type.value,
+            event.skill_name,
+            event.actor,
+            details,
+        )
+
+    console.print(table)
+
+
+@governance_app.command("approve")
+def governance_approve(
+    skill_path: Path = typer.Argument(..., help="Path to skill directory"),
+    tier: str = typer.Option(
+        "enterprise",
+        "--tier",
+        "-t",
+        help="Trust tier to approve for",
+    ),
+    approver: Optional[str] = typer.Option(
+        None,
+        "--by",
+        "-b",
+        help="Approver name",
+    ),
+    notes: str = typer.Option(
+        "",
+        "--notes",
+        "-n",
+        help="Approval notes",
+    ),
+) -> None:
+    """Approve a skill for a trust tier.
+
+    Records formal approval with audit trail.
+
+    Example:
+
+    \b
+        skillforge governance approve ./skills/my-skill --tier enterprise --by admin
+    """
+    import uuid
+    from skillforge.governance import (
+        TrustTier,
+        get_trust_metadata,
+        set_trust_metadata,
+        log_approval,
+        get_current_actor,
+    )
+    from datetime import datetime
+
+    skill_path = Path(skill_path)
+
+    if not skill_path.exists():
+        console.print(f"[red]Skill not found:[/red] {skill_path}")
+        raise typer.Exit(code=1)
+
+    try:
+        trust_tier = TrustTier[tier.upper()]
+    except KeyError:
+        console.print(f"[red]Invalid trust tier:[/red] {tier}")
+        raise typer.Exit(code=1)
+
+    # Get current metadata
+    metadata = get_trust_metadata(skill_path)
+
+    # Generate approval ID
+    approval_id = f"APR-{uuid.uuid4().hex[:8].upper()}"
+
+    # Update metadata
+    metadata.tier = trust_tier
+    metadata.approval_id = approval_id
+    metadata.verified_at = datetime.now()
+    metadata.verified_by = approver or get_current_actor()
+    metadata.notes = notes
+
+    set_trust_metadata(skill_path, metadata)
+
+    # Log the approval
+    log_approval(
+        skill_name=skill_path.name,
+        approval_id=approval_id,
+        tier=tier,
+        actor=approver,
+    )
+
+    console.print()
+    console.print(f"[green]✓ Skill approved[/green]")
+    console.print(f"  Approval ID: {approval_id}")
+    console.print(f"  Trust Tier: {trust_tier.name.lower()}")
+    console.print(f"  Approved by: {metadata.verified_by}")
+    if notes:
+        console.print(f"  Notes: {notes}")
+
+
 if __name__ == "__main__":
     app()

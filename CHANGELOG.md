@@ -7,6 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-01-22
+
+### Added
+
+- **Security Scanning** - Detect vulnerabilities in skills before deployment
+  - Scan for prompt injection, jailbreak attempts, instruction overrides
+  - Detect credential exposure (API keys, AWS keys, private keys, passwords)
+  - Find data exfiltration patterns and unsafe URLs
+  - Identify code execution risks and path traversal
+  - Risk scoring (0-100) with severity levels (critical, high, medium, low, info)
+  - 25+ built-in security patterns
+
+- **Security CLI Commands**
+  - `skillforge security scan ./skills/my-skill` - Scan skill for vulnerabilities
+  - `skillforge security scan --min-severity medium` - Filter by severity
+  - `skillforge security scan --format json` - JSON output for CI/CD
+  - `skillforge security patterns` - List all security patterns
+  - `skillforge security patterns --severity critical` - Filter patterns
+
+- **Trust Tiers** - Classify skills by verification status
+  - Four trust levels: untrusted, community, verified, enterprise
+  - Trust metadata stored with skills (`.trust.yml`)
+  - `skillforge governance trust ./skill` - View trust status
+  - `skillforge governance trust ./skill --set verified` - Set trust tier
+
+- **Governance Policies** - Control skill usage in different environments
+  - Built-in policies: development, staging, production, enterprise
+  - Configurable: min trust tier, max risk score, required scans, approval
+  - `skillforge governance policy list` - List all policies
+  - `skillforge governance policy show production` - View policy details
+  - `skillforge governance policy create custom` - Create custom policy
+  - `skillforge governance check ./skill --policy production` - Check against policy
+
+- **Audit Trails** - Track skill lifecycle events
+  - Log creation, modification, security scans, trust changes, approvals
+  - Query events by skill, date range, event type
+  - `skillforge governance audit` - View audit events
+  - `skillforge governance audit --skill my-skill` - Filter by skill
+  - `skillforge governance audit --summary` - View aggregate summary
+  - `skillforge governance approve ./skill --tier enterprise` - Formal approval
+
+- **Programmatic Security API**
+  - `skillforge.security` module:
+    - `scan_skill()`, `scan_content()`, `quick_scan()` functions
+    - `SecurityScanner` class with configurable patterns
+    - `ScanResult` with findings, risk score, pass/fail status
+    - `SecurityPattern`, `SecurityFinding`, `Severity`, `SecurityIssueType`
+    - `get_patterns_by_severity()`, `get_patterns_by_type()`
+
+- **Programmatic Governance API**
+  - `skillforge.governance.trust` module:
+    - `TrustTier` enum, `TrustMetadata` dataclass
+    - `get_trust_metadata()`, `set_trust_tier()`, `meets_trust_requirement()`
+  - `skillforge.governance.policy` module:
+    - `TrustPolicy`, `PolicyCheckResult`, `BUILTIN_POLICIES`
+    - `check_policy()`, `enforce_policy()`, `load_policy()`, `save_policy()`
+  - `skillforge.governance.audit` module:
+    - `AuditLogger`, `AuditEvent`, `AuditQuery`, `AuditSummary`
+    - `log_skill_created()`, `log_security_scan()`, `log_trust_changed()`
+    - `log_policy_check()`, `log_approval()`, `query_events()`
+
 ## [0.10.0] - 2026-01-22
 
 ### Added
