@@ -1,6 +1,6 @@
 """SkillForge - Create, validate, and bundle Anthropic Agent Skills."""
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 from skillforge.skill import (
     Skill,
@@ -45,8 +45,10 @@ from skillforge.claude_code import (
 from skillforge.ai import (
     generate_skill,
     improve_skill,
+    analyze_skill,
     get_available_providers,
     GenerationResult,
+    AnalysisResult,
 )
 from skillforge.tester import (
     TestCase,
@@ -106,11 +108,13 @@ __all__ = [
     "InstalledSkill",
     "USER_SKILLS_DIR",
     "PROJECT_SKILLS_DIR",
-    # AI Generation
+    # AI Generation & Analysis
     "generate_skill",
     "improve_skill",
+    "analyze_skill",
     "get_available_providers",
     "GenerationResult",
+    "AnalysisResult",
     # Testing
     "TestCase",
     "TestResult",

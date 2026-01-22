@@ -779,6 +779,167 @@ def improve(
 
 
 @app.command()
+def analyze(
+    skill_path: Path = typer.Argument(..., help="Path to the skill directory"),
+    provider: Optional[str] = typer.Option(
+        None,
+        "--provider",
+        "-p",
+        help="AI provider (anthropic, openai, ollama)",
+    ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="Specific model to use",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Output results as JSON",
+    ),
+) -> None:
+    """Analyze a skill using AI for quality and improvement suggestions.
+
+    Uses AI to evaluate the skill on clarity, completeness, examples,
+    and actionability. Provides specific suggestions for improvement.
+
+    Requires an AI provider (set ANTHROPIC_API_KEY or OPENAI_API_KEY,
+    or run Ollama locally).
+
+    Example:
+
+    \b
+        skillforge analyze ./skills/my-skill
+        skillforge analyze ./skills/my-skill --provider anthropic
+        skillforge analyze ./skills/my-skill --json
+    """
+    import json
+
+    from skillforge.ai import analyze_skill, get_default_provider
+
+    skill_path = Path(skill_path)
+
+    if not skill_path.exists():
+        console.print(f"[red]Error:[/red] Skill not found: {skill_path}")
+        raise typer.Exit(code=1)
+
+    # Check provider availability
+    if provider is None:
+        default = get_default_provider()
+        if default:
+            provider, model = default[0], model or default[1]
+            if not json_output:
+                console.print(f"[dim]Using provider: {provider} ({model})[/dim]")
+        else:
+            console.print("[red]Error:[/red] No AI provider available.")
+            console.print()
+            console.print("[bold]Setup options:[/bold]")
+            console.print("  • Anthropic: [cyan]export ANTHROPIC_API_KEY=your-key[/cyan]")
+            console.print("  • OpenAI: [cyan]export OPENAI_API_KEY=your-key[/cyan]")
+            console.print("  • Ollama: [cyan]ollama serve[/cyan]")
+            console.print()
+            console.print("Run [cyan]skillforge providers[/cyan] to check status.")
+            raise typer.Exit(code=1)
+    elif not json_output:
+        console.print(f"[dim]Using provider: {provider}{f' ({model})' if model else ''}[/dim]")
+
+    if not json_output:
+        console.print()
+
+    with console.status("[bold green]Analyzing skill..."):
+        result = analyze_skill(
+            skill_path=skill_path,
+            provider=provider,
+            model=model,
+        )
+
+    if not result.success:
+        if json_output:
+            console.print(json.dumps({"success": False, "error": result.error}, indent=2))
+        else:
+            console.print(f"[red]Error:[/red] {result.error}")
+        raise typer.Exit(code=1)
+
+    # Output as JSON
+    if json_output:
+        data = {
+            "success": True,
+            "skill_name": result.skill_name,
+            "overall_score": result.overall_score,
+            "clarity_score": result.clarity_score,
+            "completeness_score": result.completeness_score,
+            "examples_score": result.examples_score,
+            "actionability_score": result.actionability_score,
+            "strengths": result.strengths,
+            "suggestions": result.suggestions,
+            "issues": result.issues,
+            "provider": result.provider,
+            "model": result.model,
+        }
+        console.print(json.dumps(data, indent=2))
+        return
+
+    # Human-readable output
+    console.print()
+    console.print(Panel(
+        f"[bold]Skill Analysis: {result.skill_name}[/bold]",
+        border_style="blue",
+    ))
+
+    # Overall score
+    console.print()
+    score_color = "green" if (result.overall_score or 0) >= 70 else "yellow" if (result.overall_score or 0) >= 50 else "red"
+    console.print(f"[bold]Overall Score:[/bold] [{score_color}]{result.overall_score}/100[/{score_color}]")
+
+    # Scores table
+    console.print()
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Dimension")
+    table.add_column("Score", justify="right")
+
+    scores = [
+        ("Clarity", result.clarity_score),
+        ("Completeness", result.completeness_score),
+        ("Examples", result.examples_score),
+        ("Actionability", result.actionability_score),
+    ]
+
+    for name, score in scores:
+        if score is not None:
+            color = "green" if score >= 70 else "yellow" if score >= 50 else "red"
+            table.add_row(name, f"[{color}]{score}/100[/{color}]")
+        else:
+            table.add_row(name, "[dim]N/A[/dim]")
+
+    console.print(table)
+
+    # Strengths
+    if result.strengths:
+        console.print()
+        console.print("[bold green]Strengths:[/bold green]")
+        for strength in result.strengths:
+            console.print(f"  [green]•[/green] {strength}")
+
+    # Suggestions
+    if result.suggestions:
+        console.print()
+        console.print("[bold yellow]Suggestions:[/bold yellow]")
+        for suggestion in result.suggestions:
+            console.print(f"  [yellow]•[/yellow] {suggestion}")
+
+    # Issues
+    if result.issues:
+        console.print()
+        console.print("[bold red]Issues:[/bold red]")
+        for issue in result.issues:
+            console.print(f"  [red]•[/red] {issue}")
+
+    console.print()
+    console.print(f"[dim]Analyzed with: {result.provider}/{result.model}[/dim]")
+
+
+@app.command()
 def test(
     skill_path: Path = typer.Argument(..., help="Path to the skill directory"),
     mode: str = typer.Option(

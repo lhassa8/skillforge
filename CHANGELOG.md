@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2025-01-21
+
+### Added
+
+- **AI-Powered Skill Analysis** - Analyze skills for quality and get improvement suggestions
+  - `skillforge analyze ./skills/my-skill` - Get AI-powered quality analysis
+  - `skillforge analyze ./skills/my-skill --json` - Output as JSON for CI/tooling
+  - Quality scores: clarity, completeness, examples, actionability (0-100)
+  - Detailed feedback: strengths, suggestions, issues
+
+- **Programmatic Analysis API**
+  - `analyze_skill()` function for programmatic analysis
+  - `AnalysisResult` dataclass with scores and feedback
+
 ## [0.5.0] - 2025-01-21
 
 ### Added

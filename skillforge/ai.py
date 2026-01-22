@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Literal
 
@@ -66,6 +66,33 @@ Make the skill more:
 
 Return the complete improved SKILL.md content, starting with --- and ending after the markdown content."""
 
+ANALYSIS_PROMPT = """Analyze this SKILL.md file and provide detailed feedback on its quality.
+
+```markdown
+{skill_content}
+```
+
+Evaluate the skill on these dimensions (score 0-100):
+
+1. **Clarity** - Are instructions clear, specific, and unambiguous? Can Claude understand exactly what to do?
+2. **Completeness** - Does it cover edge cases, error handling, and various scenarios?
+3. **Examples** - Are there enough high-quality examples showing request/response patterns?
+4. **Actionability** - Can an AI assistant act on these instructions immediately without guessing?
+
+Respond ONLY with valid JSON in this exact format (no markdown code blocks, just raw JSON):
+{{
+  "overall_score": <0-100>,
+  "clarity_score": <0-100>,
+  "completeness_score": <0-100>,
+  "examples_score": <0-100>,
+  "actionability_score": <0-100>,
+  "strengths": ["strength 1", "strength 2"],
+  "suggestions": ["suggestion 1", "suggestion 2"],
+  "issues": ["issue 1", "issue 2"]
+}}
+
+Be specific and actionable in your feedback. Focus on how to make this skill more effective for Claude."""
+
 
 @dataclass
 class GenerationResult:
@@ -74,6 +101,31 @@ class GenerationResult:
     success: bool
     skill: Optional[Skill] = None
     raw_content: Optional[str] = None
+    error: Optional[str] = None
+    provider: Optional[str] = None
+    model: Optional[str] = None
+
+
+@dataclass
+class AnalysisResult:
+    """Result of AI skill analysis."""
+
+    success: bool
+    skill_name: Optional[str] = None
+
+    # Quality scores (0-100)
+    overall_score: Optional[int] = None
+    clarity_score: Optional[int] = None
+    completeness_score: Optional[int] = None
+    examples_score: Optional[int] = None
+    actionability_score: Optional[int] = None
+
+    # Feedback
+    strengths: list[str] = field(default_factory=list)
+    suggestions: list[str] = field(default_factory=list)
+    issues: list[str] = field(default_factory=list)
+
+    # Metadata
     error: Optional[str] = None
     provider: Optional[str] = None
     model: Optional[str] = None
@@ -93,8 +145,8 @@ def get_available_providers() -> list[dict]:
             providers.append({
                 "name": "anthropic",
                 "available": True,
-                "models": ["claude-sonnet-4-20250514", "claude-opus-4-1-20250219"],
-                "default_model": "claude-sonnet-4-20250514",
+                "models": ["claude-3-5-haiku-latest", "claude-3-5-haiku-latest", "claude-opus-4-1-20250219"],
+                "default_model": "claude-3-5-haiku-latest",
             })
         else:
             providers.append({
@@ -211,7 +263,7 @@ def generate_skill(
     # Call the appropriate provider
     try:
         if provider == "anthropic":
-            raw_content = _call_anthropic(prompt, model or "claude-sonnet-4-20250514")
+            raw_content = _call_anthropic(prompt, model or "claude-3-5-haiku-latest")
         elif provider == "openai":
             raw_content = _call_openai(prompt, model or "gpt-4o")
         elif provider == "ollama":
@@ -304,7 +356,7 @@ def improve_skill(
     # Call the appropriate provider
     try:
         if provider == "anthropic":
-            raw_content = _call_anthropic(prompt, model or "claude-sonnet-4-20250514")
+            raw_content = _call_anthropic(prompt, model or "claude-3-5-haiku-latest")
         elif provider == "openai":
             raw_content = _call_openai(prompt, model or "gpt-4o")
         elif provider == "ollama":
@@ -343,6 +395,117 @@ def improve_skill(
             provider=provider,
             model=model,
         )
+
+
+def analyze_skill(
+    skill_path: Path,
+    provider: Optional[str] = None,
+    model: Optional[str] = None,
+) -> AnalysisResult:
+    """Analyze a skill using AI and provide quality feedback.
+
+    Args:
+        skill_path: Path to the skill directory
+        provider: AI provider to use (anthropic, openai, ollama)
+        model: Specific model to use
+
+    Returns:
+        AnalysisResult with scores and suggestions
+    """
+    # Load the skill
+    try:
+        existing = Skill.from_directory(skill_path)
+        skill_content = existing.to_skill_md()
+        skill_name = existing.name
+    except Exception as e:
+        return AnalysisResult(
+            success=False,
+            error=f"Failed to load skill: {e}",
+        )
+
+    # Determine provider and model
+    if provider is None:
+        default = get_default_provider()
+        if default is None:
+            return AnalysisResult(
+                success=False,
+                error="No AI provider available.",
+            )
+        provider, default_model = default
+        if model is None:
+            model = default_model
+
+    # Build the prompt
+    prompt = ANALYSIS_PROMPT.format(skill_content=skill_content)
+
+    # Call the appropriate provider
+    try:
+        if provider == "anthropic":
+            raw_response = _call_anthropic(prompt, model or "claude-3-5-haiku-latest")
+        elif provider == "openai":
+            raw_response = _call_openai(prompt, model or "gpt-4o")
+        elif provider == "ollama":
+            raw_response = _call_ollama(prompt, model or "llama3.2")
+        else:
+            return AnalysisResult(
+                success=False,
+                error=f"Unknown provider: {provider}",
+            )
+    except Exception as e:
+        return AnalysisResult(
+            success=False,
+            error=f"API call failed: {e}",
+            provider=provider,
+            model=model,
+        )
+
+    # Parse the JSON response
+    try:
+        data = _parse_analysis_response(raw_response)
+
+        return AnalysisResult(
+            success=True,
+            skill_name=skill_name,
+            overall_score=data.get("overall_score"),
+            clarity_score=data.get("clarity_score"),
+            completeness_score=data.get("completeness_score"),
+            examples_score=data.get("examples_score"),
+            actionability_score=data.get("actionability_score"),
+            strengths=data.get("strengths", []),
+            suggestions=data.get("suggestions", []),
+            issues=data.get("issues", []),
+            provider=provider,
+            model=model,
+        )
+    except Exception as e:
+        return AnalysisResult(
+            success=False,
+            skill_name=skill_name,
+            error=f"Failed to parse analysis response: {e}",
+            provider=provider,
+            model=model,
+        )
+
+
+def _parse_analysis_response(raw: str) -> dict:
+    """Parse the JSON response from the analysis prompt."""
+    # Try to extract JSON from the response
+    text = raw.strip()
+
+    # Remove markdown code blocks if present
+    if text.startswith("```"):
+        lines = text.split("\n")
+        # Skip first line (```json or ```)
+        start_idx = 1
+        # Find closing ```
+        end_idx = len(lines) - 1
+        for i in range(len(lines) - 1, 0, -1):
+            if lines[i].strip() == "```":
+                end_idx = i
+                break
+        text = "\n".join(lines[start_idx:end_idx])
+
+    return json.loads(text)
 
 
 def _build_context(context_dir: Path, max_files: int = 10, max_size: int = 5000) -> str:
