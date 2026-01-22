@@ -35,6 +35,12 @@ def new(
         "-d",
         help="Description of what the skill does and when to use it",
     ),
+    template: Optional[str] = typer.Option(
+        None,
+        "--template",
+        "-T",
+        help="Template to use (run 'skillforge templates' to see available)",
+    ),
     output_dir: Path = typer.Option(
         DEFAULT_SKILLS_DIR,
         "--out",
@@ -64,6 +70,7 @@ def new(
     \b
         skillforge new pdf-processor -d "Extract text and data from PDF files"
         skillforge new code-reviewer --with-scripts
+        skillforge new my-reviewer --template code-review
     """
     from skillforge.scaffold import create_skill_scaffold
     from skillforge.skill import normalize_skill_name
@@ -74,16 +81,21 @@ def new(
         console.print(f"[dim]Normalizing name: {name} → {normalized}[/dim]")
 
     try:
-        skill_dir = create_skill_scaffold(
+        skill_dir, used_template = create_skill_scaffold(
             name=name,
             output_dir=output_dir,
             description=description,
+            template=template,
             with_scripts=with_scripts,
             force=force,
         )
 
         console.print()
         console.print(f"[green]✓ Created skill:[/green] {skill_dir}")
+
+        if used_template:
+            console.print(f"[dim]Template: {used_template.name} ({used_template.category})[/dim]")
+
         console.print()
 
         # Show created files
@@ -95,7 +107,10 @@ def new(
 
         console.print()
         console.print("[bold]Next steps:[/bold]")
-        console.print(f"  1. Edit [cyan]{skill_dir}/SKILL.md[/cyan] with your instructions")
+        if used_template:
+            console.print(f"  1. Customize [cyan]{skill_dir}/SKILL.md[/cyan] for your needs")
+        else:
+            console.print(f"  1. Edit [cyan]{skill_dir}/SKILL.md[/cyan] with your instructions")
         console.print(f"  2. Validate with: [cyan]skillforge validate {skill_dir}[/cyan]")
         console.print(f"  3. Bundle with: [cyan]skillforge bundle {skill_dir}[/cyan]")
 
@@ -1118,6 +1133,111 @@ def _format_results_junit(result: "TestSuiteResult") -> str:
     rough_string = tostring(testsuite, encoding="unicode")
     reparsed = minidom.parseString(rough_string)
     return reparsed.toprettyxml(indent="  ")
+
+
+# =============================================================================
+# Templates Commands
+# =============================================================================
+
+templates_app = typer.Typer(
+    help="Manage skill templates",
+    no_args_is_help=False,
+)
+app.add_typer(templates_app, name="templates")
+
+
+@templates_app.callback(invoke_without_command=True)
+def templates_list(ctx: typer.Context) -> None:
+    """List available skill templates.
+
+    Example:
+
+    \b
+        skillforge templates
+    """
+    if ctx.invoked_subcommand is not None:
+        return
+
+    from skillforge.templates import list_templates
+
+    templates = list_templates()
+
+    console.print()
+    table = Table(title="Available Templates", show_header=True, header_style="bold")
+    table.add_column("Template", style="cyan")
+    table.add_column("Category")
+    table.add_column("Description")
+
+    for tmpl in templates:
+        table.add_row(tmpl.name, tmpl.category, tmpl.description)
+
+    console.print(table)
+    console.print()
+    console.print("[dim]Use: skillforge new my-skill --template <name>[/dim]")
+    console.print("[dim]Preview: skillforge templates show <name>[/dim]")
+
+
+@templates_app.command("show")
+def templates_show(
+    name: str = typer.Argument(..., help="Template name to show"),
+) -> None:
+    """Show details of a template.
+
+    Displays the template's description and a preview of its content.
+
+    Example:
+
+    \b
+        skillforge templates show code-review
+        skillforge templates show git-commit
+    """
+    from skillforge.templates import get_template, get_template_names
+
+    template = get_template(name)
+
+    if not template:
+        console.print(f"[red]Error:[/red] Unknown template: {name}")
+        console.print()
+        available = ", ".join(get_template_names())
+        console.print(f"[dim]Available templates: {available}[/dim]")
+        raise typer.Exit(code=1)
+
+    console.print()
+    console.print(Panel(
+        f"[bold]{template.title}[/bold]\n\n"
+        f"[dim]Category:[/dim] {template.category}\n"
+        f"[dim]Tags:[/dim] {', '.join(template.tags)}\n\n"
+        f"{template.description}",
+        title=f"Template: {template.name}",
+        border_style="blue",
+    ))
+
+    console.print()
+    console.print("[bold]Content Preview:[/bold]")
+
+    # Show preview of content (first ~60 lines or 2000 chars)
+    content_preview = template.content
+    lines = content_preview.split("\n")
+    if len(lines) > 60:
+        content_preview = "\n".join(lines[:60]) + "\n\n[...truncated...]"
+    elif len(content_preview) > 2000:
+        content_preview = content_preview[:2000] + "\n\n[...truncated...]"
+
+    syntax = Syntax(
+        content_preview,
+        "markdown",
+        theme="monokai",
+        line_numbers=True,
+    )
+    console.print(syntax)
+
+    console.print()
+    console.print(f"[bold]Create skill:[/bold] [cyan]skillforge new my-skill --template {name}[/cyan]")
+
+
+# =============================================================================
+# AI Commands
+# =============================================================================
 
 
 @app.command()

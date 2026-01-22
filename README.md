@@ -88,7 +88,34 @@ The generated skill includes:
 - Edge case handling
 - Best practices guidance
 
-### Option 2: Manual Creation
+### Option 2: Start from a Template
+
+Use built-in templates for common use cases:
+
+```bash
+# List available templates
+skillforge templates
+
+# Create from template
+skillforge new my-reviewer --template code-review
+
+# Preview a template before using
+skillforge templates show code-review
+```
+
+**Available templates:**
+| Template | Description |
+|----------|-------------|
+| `code-review` | Review code for best practices, bugs, security |
+| `git-commit` | Write conventional commit messages |
+| `git-pr` | Create comprehensive PR descriptions |
+| `api-docs` | Generate API documentation |
+| `debugging` | Systematic debugging assistance |
+| `sql-helper` | Write and optimize SQL queries |
+| `test-writer` | Generate unit tests |
+| `explainer` | Explain complex code or concepts |
+
+### Option 3: Manual Creation
 
 Create a skill scaffold and customize it yourself:
 
@@ -218,6 +245,19 @@ Create a new skill scaffold.
 ```bash
 skillforge new my-skill -d "Description of what the skill does"
 skillforge new my-skill --with-scripts  # Include scripts/ directory
+skillforge new my-skill --template code-review  # Start from template
+```
+
+#### `skillforge templates`
+
+List and preview available skill templates.
+
+```bash
+# List all templates
+skillforge templates
+
+# Preview a specific template
+skillforge templates show code-review
 ```
 
 #### `skillforge validate`

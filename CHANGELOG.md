@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2025-01-21
+
+### Added
+
+- **Skill Templates** - Start skills from built-in templates
+  - `skillforge new my-skill --template code-review` to create from template
+  - `skillforge templates` to list all available templates
+  - `skillforge templates show <name>` to preview a template
+  - 8 built-in templates:
+    - `code-review` - Review code for best practices, bugs, security
+    - `git-commit` - Write conventional commit messages
+    - `git-pr` - Create comprehensive PR descriptions
+    - `api-docs` - Generate API documentation
+    - `debugging` - Systematic debugging assistance
+    - `sql-helper` - Write and optimize SQL queries
+    - `test-writer` - Generate unit tests
+    - `explainer` - Explain complex code or concepts
+
+- **Programmatic Templates API**
+  - `SkillTemplate` dataclass for template definitions
+  - `get_template()`, `list_templates()`, `get_templates_by_category()` functions
+  - Templates are organized by category (Code Quality, Git, Documentation, etc.)
+
 ## [0.3.0] - 2025-01-21
 
 ### Added

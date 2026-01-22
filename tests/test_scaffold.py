@@ -22,7 +22,7 @@ class TestCreateSkillScaffold:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)
 
-            skill_dir = create_skill_scaffold("my-skill", output_dir)
+            skill_dir, _ = create_skill_scaffold("my-skill", output_dir)
 
             assert skill_dir.exists()
             assert skill_dir.is_dir()
@@ -31,7 +31,7 @@ class TestCreateSkillScaffold:
     def test_creates_skill_md(self):
         """Test that scaffold creates SKILL.md."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            skill_dir = create_skill_scaffold("test-skill", Path(tmpdir))
+            skill_dir, _ = create_skill_scaffold("test-skill", Path(tmpdir))
 
             skill_md = skill_dir / "SKILL.md"
             assert skill_md.exists()
@@ -39,7 +39,7 @@ class TestCreateSkillScaffold:
     def test_skill_md_is_valid(self):
         """Test that created SKILL.md is valid."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            skill_dir = create_skill_scaffold(
+            skill_dir, _ = create_skill_scaffold(
                 "valid-skill",
                 Path(tmpdir),
                 description="A test description. Use when testing.",
@@ -52,7 +52,7 @@ class TestCreateSkillScaffold:
     def test_normalizes_name(self):
         """Test that name is normalized."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            skill_dir = create_skill_scaffold("My Cool Skill", Path(tmpdir))
+            skill_dir, _ = create_skill_scaffold("My Cool Skill", Path(tmpdir))
 
             assert skill_dir.name == "my-cool-skill"
 
@@ -63,7 +63,7 @@ class TestCreateSkillScaffold:
         """Test scaffold with custom description."""
         with tempfile.TemporaryDirectory() as tmpdir:
             desc = "Custom description for the skill."
-            skill_dir = create_skill_scaffold(
+            skill_dir, _ = create_skill_scaffold(
                 "desc-test",
                 Path(tmpdir),
                 description=desc,
@@ -75,7 +75,7 @@ class TestCreateSkillScaffold:
     def test_default_description(self):
         """Test scaffold generates default description."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            skill_dir = create_skill_scaffold("no-desc", Path(tmpdir))
+            skill_dir, _ = create_skill_scaffold("no-desc", Path(tmpdir))
 
             skill = Skill.from_directory(skill_dir)
             assert "no-desc" in skill.description
@@ -84,7 +84,7 @@ class TestCreateSkillScaffold:
     def test_with_scripts(self):
         """Test scaffold with scripts directory."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            skill_dir = create_skill_scaffold(
+            skill_dir, _ = create_skill_scaffold(
                 "with-scripts",
                 Path(tmpdir),
                 with_scripts=True,
@@ -100,7 +100,7 @@ class TestCreateSkillScaffold:
     def test_example_script_content(self):
         """Test that example script has proper content."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            skill_dir = create_skill_scaffold(
+            skill_dir, _ = create_skill_scaffold(
                 "script-test",
                 Path(tmpdir),
                 with_scripts=True,
@@ -129,14 +129,14 @@ class TestCreateSkillScaffold:
             output_dir = Path(tmpdir)
 
             # Create first
-            skill_dir1 = create_skill_scaffold(
+            skill_dir1, _ = create_skill_scaffold(
                 "force-test",
                 output_dir,
                 description="First version",
             )
 
             # Create again with force
-            skill_dir2 = create_skill_scaffold(
+            skill_dir2, _ = create_skill_scaffold(
                 "force-test",
                 output_dir,
                 description="Second version",
@@ -160,7 +160,7 @@ class TestAddReferenceDoc:
     def test_add_reference_doc(self):
         """Test adding a reference document."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            skill_dir = create_skill_scaffold("ref-test", Path(tmpdir))
+            skill_dir, _ = create_skill_scaffold("ref-test", Path(tmpdir))
 
             doc_path = add_reference_doc(skill_dir, "REFERENCE")
 
@@ -171,7 +171,7 @@ class TestAddReferenceDoc:
     def test_auto_adds_md_extension(self):
         """Test that .md extension is added if missing."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            skill_dir = create_skill_scaffold("ext-test", Path(tmpdir))
+            skill_dir, _ = create_skill_scaffold("ext-test", Path(tmpdir))
 
             doc_path = add_reference_doc(skill_dir, "API-DOCS")
 
@@ -180,7 +180,7 @@ class TestAddReferenceDoc:
     def test_keeps_md_extension(self):
         """Test that .md extension is not duplicated."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            skill_dir = create_skill_scaffold("md-test", Path(tmpdir))
+            skill_dir, _ = create_skill_scaffold("md-test", Path(tmpdir))
 
             doc_path = add_reference_doc(skill_dir, "README.md")
 
@@ -189,7 +189,7 @@ class TestAddReferenceDoc:
     def test_custom_content(self):
         """Test adding custom content."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            skill_dir = create_skill_scaffold("custom", Path(tmpdir))
+            skill_dir, _ = create_skill_scaffold("custom", Path(tmpdir))
 
             custom = "# Custom Content\n\nMy custom documentation."
             doc_path = add_reference_doc(skill_dir, "CUSTOM", content=custom)
@@ -203,7 +203,7 @@ class TestAddScript:
     def test_add_python_script(self):
         """Test adding a Python script."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            skill_dir = create_skill_scaffold("py-script", Path(tmpdir))
+            skill_dir, _ = create_skill_scaffold("py-script", Path(tmpdir))
 
             script_path = add_script(skill_dir, "helper", language="python")
 
@@ -214,7 +214,7 @@ class TestAddScript:
     def test_add_bash_script(self):
         """Test adding a Bash script."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            skill_dir = create_skill_scaffold("bash-script", Path(tmpdir))
+            skill_dir, _ = create_skill_scaffold("bash-script", Path(tmpdir))
 
             script_path = add_script(skill_dir, "build", language="bash")
 
@@ -225,7 +225,7 @@ class TestAddScript:
     def test_add_node_script(self):
         """Test adding a Node.js script."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            skill_dir = create_skill_scaffold("node-script", Path(tmpdir))
+            skill_dir, _ = create_skill_scaffold("node-script", Path(tmpdir))
 
             script_path = add_script(skill_dir, "process", language="node")
 
@@ -237,7 +237,7 @@ class TestAddScript:
         """Test that scripts directory is created if missing."""
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create without scripts
-            skill_dir = create_skill_scaffold(
+            skill_dir, _ = create_skill_scaffold(
                 "no-scripts",
                 Path(tmpdir),
                 with_scripts=False,
@@ -252,7 +252,7 @@ class TestAddScript:
     def test_custom_script_content(self):
         """Test adding script with custom content."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            skill_dir = create_skill_scaffold("custom-script", Path(tmpdir))
+            skill_dir, _ = create_skill_scaffold("custom-script", Path(tmpdir))
 
             custom = "#!/usr/bin/env python3\nprint('custom')"
             script_path = add_script(skill_dir, "custom", content=custom)

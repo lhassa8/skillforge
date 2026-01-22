@@ -8,35 +8,51 @@ from skillforge.skill import (
     generate_skill_content,
     normalize_skill_name,
 )
+from skillforge.templates import SkillTemplate, get_template
 
 
 def create_skill_scaffold(
     name: str,
     output_dir: Path,
     description: str = "",
+    template: Optional[str] = None,
     with_scripts: bool = False,
     force: bool = False,
-) -> Path:
+) -> tuple[Path, Optional[SkillTemplate]]:
     """Create a new Anthropic Skill scaffold.
 
     Args:
         name: Name of the skill (will be normalized)
         output_dir: Parent directory for the skill folder
         description: Optional description for the skill
+        template: Optional template name to use (e.g., "code-review")
         with_scripts: If True, create a scripts/ directory with example
         force: If True, overwrite existing skill folder
 
     Returns:
-        Path to the created skill directory
+        Tuple of (path to created skill directory, template used or None)
 
     Raises:
         FileExistsError: If skill directory already exists and force is False
+        ValueError: If template name is invalid
     """
     # Normalize the skill name
     safe_name = normalize_skill_name(name)
 
     if not safe_name:
         raise ValueError(f"Invalid skill name: {name}")
+
+    # Get template if specified
+    skill_template: Optional[SkillTemplate] = None
+    if template:
+        skill_template = get_template(template)
+        if not skill_template:
+            from skillforge.templates import get_template_names
+
+            available = ", ".join(get_template_names())
+            raise ValueError(
+                f"Unknown template: {template}. Available templates: {available}"
+            )
 
     skill_dir = output_dir / safe_name
 
@@ -46,12 +62,19 @@ def create_skill_scaffold(
     # Create directory structure
     skill_dir.mkdir(parents=True, exist_ok=True)
 
-    # Generate default description if not provided
-    if not description:
-        description = f"TODO: Describe what {safe_name} does and when Claude should use it."
-
-    # Generate SKILL.md content
-    content = generate_skill_content(safe_name, description)
+    # Generate description and content based on template
+    if skill_template:
+        # Use template
+        if not description:
+            description = skill_template.description
+        content = skill_template.content
+    else:
+        # Default scaffold
+        if not description:
+            description = (
+                f"TODO: Describe what {safe_name} does and when Claude should use it."
+            )
+        content = generate_skill_content(safe_name, description)
 
     skill = Skill(
         name=safe_name,
@@ -73,7 +96,7 @@ def create_skill_scaffold(
         example_script = scripts_dir / "example.py"
         example_script.write_text(generate_example_script(safe_name))
 
-    return skill_dir
+    return skill_dir, skill_template
 
 
 def generate_example_script(skill_name: str) -> str:

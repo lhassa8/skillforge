@@ -1,6 +1,6 @@
 """SkillForge - Create, validate, and bundle Anthropic Agent Skills."""
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 from skillforge.skill import (
     Skill,
@@ -23,6 +23,13 @@ from skillforge.scaffold import (
     create_skill_scaffold,
     add_reference_doc,
     add_script,
+)
+from skillforge.templates import (
+    SkillTemplate,
+    get_template,
+    list_templates,
+    get_templates_by_category,
+    get_template_names,
 )
 from skillforge.ai import (
     generate_skill,
@@ -72,6 +79,12 @@ __all__ = [
     "create_skill_scaffold",
     "add_reference_doc",
     "add_script",
+    # Templates
+    "SkillTemplate",
+    "get_template",
+    "list_templates",
+    "get_templates_by_category",
+    "get_template_names",
     # AI Generation
     "generate_skill",
     "improve_skill",
