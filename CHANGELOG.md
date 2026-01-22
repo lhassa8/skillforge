@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-01-22
+
+### Added
+
+- **MCP Integration** - Connect SkillForge skills with the Model Context Protocol ecosystem
+  - Bidirectional conversion between SkillForge skills and MCP tools
+  - Generate MCP servers that expose skills as tools for Claude Desktop and other MCP clients
+  - Discover and import tools from existing MCP servers as SkillForge skills
+
+- **MCP Server Generation**
+  - `skillforge mcp init ./my-server` - Create a new MCP server project
+  - `skillforge mcp add ./my-server ./skills/my-skill` - Add a skill to the server
+  - `skillforge mcp remove ./my-server tool-name` - Remove a tool from the server
+  - `skillforge mcp list ./my-server` - List tools in a server
+  - `skillforge mcp serve ./my-server` - Run the MCP server (stdio transport)
+  - `skillforge mcp config ./my-server` - Show Claude Desktop configuration snippet
+
+- **MCP Client / Discovery**
+  - `skillforge mcp discover` - List tools from configured MCP servers
+  - `skillforge mcp discover --config ./config.json` - Use custom config file
+  - `skillforge mcp import <tool-name>` - Import an MCP tool as a skill
+  - Auto-detects Claude Desktop config on macOS, Windows, and Linux
+
+- **Programmatic MCP API**
+  - `skillforge.mcp.mapping` module:
+    - `MCPToolDefinition`, `MCPToolParameter` dataclasses
+    - `skill_to_mcp_tool()` - Convert skill to MCP tool definition
+    - `mcp_tool_to_skill()` - Convert MCP tool to skill
+    - `parse_mcp_tool_response()` - Parse MCP server responses
+    - `validate_tool_name()` - Validate MCP tool naming
+  - `skillforge.mcp.server` module:
+    - `MCPServerProject` - Full server project management
+    - `MCPServerConfig` - Server configuration
+    - `init_server()`, `load_server()`, `add_skill_to_server()`
+    - `remove_tool_from_server()`, `list_server_tools()`, `run_server()`
+    - `is_mcp_server()` - Check if path is MCP server project
+  - `skillforge.mcp.client` module:
+    - `DiscoveredTool`, `MCPServerInfo` dataclasses
+    - `discover_tools_from_config()` - Query servers from config file
+    - `discover_tools_from_server()` - Query a specific server
+    - `import_tool_as_skill()`, `import_tool_by_name()` - Import tools
+    - `get_claude_desktop_config_path()` - Get platform-specific config path
+    - `list_configured_servers()` - List servers from config
+
 ## [0.9.0] - 2026-01-22
 
 ### Added

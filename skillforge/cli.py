@@ -2564,5 +2564,424 @@ def lock_cmd(
         console.print("[dim]Install locked: skillforge pull <skill> --locked[/dim]")
 
 
+# =============================================================================
+# MCP Commands (v0.10.0)
+# =============================================================================
+
+mcp_app = typer.Typer(
+    name="mcp",
+    help="MCP (Model Context Protocol) integration commands.",
+    no_args_is_help=True,
+)
+app.add_typer(mcp_app, name="mcp")
+
+
+@mcp_app.command("init")
+def mcp_init(
+    server_dir: Path = typer.Argument(..., help="Directory for the MCP server project"),
+    name: Optional[str] = typer.Option(
+        None,
+        "--name",
+        "-n",
+        help="Server name (defaults to directory name)",
+    ),
+    description: str = typer.Option(
+        "",
+        "--description",
+        "-d",
+        help="Server description",
+    ),
+    port: int = typer.Option(
+        8080,
+        "--port",
+        "-p",
+        help="Port for the server",
+    ),
+) -> None:
+    """Initialize a new MCP server project.
+
+    Creates an MCP server project directory that can expose SkillForge
+    skills as MCP tools for use with Claude Desktop and other MCP clients.
+
+    Example:
+
+    \b
+        skillforge mcp init ./my-mcp-server
+        skillforge mcp init ./server -n "my-skills" -d "Custom skills server"
+    """
+    from skillforge.mcp.server import init_server, MCPServerError
+
+    try:
+        project = init_server(
+            server_dir=server_dir,
+            name=name,
+            description=description,
+            port=port,
+        )
+
+        console.print()
+        console.print(f"[green]✓ Created MCP server:[/green] {server_dir}")
+        console.print()
+        console.print("[dim]Structure:[/dim]")
+        console.print(f"  {server_dir}/")
+        console.print("  ├── mcp-server.yml   # Server configuration")
+        console.print("  ├── tools/           # Tool definitions")
+        console.print("  └── server.py        # Generated server script")
+        console.print()
+        console.print("[dim]Next steps:[/dim]")
+        console.print(f"  skillforge mcp add {server_dir} ./skills/my-skill")
+        console.print(f"  skillforge mcp serve {server_dir}")
+        console.print()
+
+        # Show MCP config snippet
+        mcp_config = project.get_mcp_config()
+        console.print("[dim]Add to Claude Desktop config:[/dim]")
+        import json
+        config_json = json.dumps(mcp_config, indent=2)
+        from rich.syntax import Syntax
+        console.print(Syntax(config_json, "json", theme="monokai"))
+
+    except MCPServerError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=1)
+
+
+@mcp_app.command("add")
+def mcp_add(
+    server_dir: Path = typer.Argument(..., help="Path to MCP server directory"),
+    skill_path: Path = typer.Argument(..., help="Path to skill directory"),
+) -> None:
+    """Add a skill to an MCP server.
+
+    Converts the skill to an MCP tool and adds it to the server.
+    The server script is automatically regenerated.
+
+    Example:
+
+    \b
+        skillforge mcp add ./my-server ./skills/code-reviewer
+        skillforge mcp add ./my-server ./skills/doc-generator
+    """
+    from skillforge.mcp.server import add_skill_to_server, MCPServerError
+
+    try:
+        tool = add_skill_to_server(server_dir, skill_path)
+
+        console.print()
+        console.print(f"[green]✓ Added tool:[/green] {tool.name}")
+        console.print(f"[dim]Description:[/dim] {tool.description}")
+        console.print()
+        console.print(f"[dim]Server updated: {server_dir}[/dim]")
+        console.print()
+        console.print(f"[dim]Run server: skillforge mcp serve {server_dir}[/dim]")
+
+    except MCPServerError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=1)
+
+
+@mcp_app.command("remove")
+def mcp_remove(
+    server_dir: Path = typer.Argument(..., help="Path to MCP server directory"),
+    tool_name: str = typer.Argument(..., help="Name of tool to remove"),
+) -> None:
+    """Remove a tool from an MCP server.
+
+    Example:
+
+    \b
+        skillforge mcp remove ./my-server code-reviewer
+    """
+    from skillforge.mcp.server import remove_tool_from_server, MCPServerError
+
+    try:
+        removed = remove_tool_from_server(server_dir, tool_name)
+
+        if removed:
+            console.print(f"[green]✓ Removed tool:[/green] {tool_name}")
+        else:
+            console.print(f"[yellow]Tool not found:[/yellow] {tool_name}")
+            raise typer.Exit(code=1)
+
+    except MCPServerError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=1)
+
+
+@mcp_app.command("list")
+def mcp_list(
+    server_dir: Path = typer.Argument(..., help="Path to MCP server directory"),
+) -> None:
+    """List tools in an MCP server.
+
+    Example:
+
+    \b
+        skillforge mcp list ./my-server
+    """
+    from skillforge.mcp.server import list_server_tools, MCPServerError
+
+    try:
+        tools = list_server_tools(server_dir)
+
+        if not tools:
+            console.print("[dim]No tools in server[/dim]")
+            return
+
+        console.print()
+        console.print(f"[bold]Tools in {server_dir}:[/bold]")
+        console.print()
+
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("Tool", style="cyan")
+        table.add_column("Description")
+        table.add_column("Parameters", style="dim")
+
+        for tool in tools:
+            param_count = len(tool.parameters)
+            param_str = f"{param_count} param(s)"
+            table.add_row(tool.name, tool.description[:50] + "..." if len(tool.description) > 50 else tool.description, param_str)
+
+        console.print(table)
+        console.print()
+        console.print(f"[dim]Total: {len(tools)} tool(s)[/dim]")
+
+    except MCPServerError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=1)
+
+
+@mcp_app.command("serve")
+def mcp_serve(
+    server_dir: Path = typer.Argument(..., help="Path to MCP server directory"),
+) -> None:
+    """Run an MCP server.
+
+    Starts the MCP server using stdio transport. This is typically
+    called by MCP clients like Claude Desktop.
+
+    Example:
+
+    \b
+        skillforge mcp serve ./my-server
+    """
+    from skillforge.mcp.server import run_server, MCPServerError
+
+    try:
+        console.print(f"[dim]Starting MCP server: {server_dir}[/dim]")
+        console.print("[dim]Press Ctrl+C to stop[/dim]")
+        console.print()
+
+        process = run_server(server_dir)
+
+        try:
+            process.wait()
+        except KeyboardInterrupt:
+            process.terminate()
+            console.print()
+            console.print("[dim]Server stopped[/dim]")
+
+    except MCPServerError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=1)
+
+
+@mcp_app.command("discover")
+def mcp_discover(
+    config_path: Optional[Path] = typer.Option(
+        None,
+        "--config",
+        "-c",
+        help="Path to MCP config file (defaults to Claude Desktop config)",
+    ),
+    server_name: Optional[str] = typer.Option(
+        None,
+        "--server",
+        "-s",
+        help="Only query specific server",
+    ),
+) -> None:
+    """Discover tools from configured MCP servers.
+
+    Lists all tools available from MCP servers defined in a config file.
+    By default, uses Claude Desktop's config file.
+
+    Example:
+
+    \b
+        skillforge mcp discover
+        skillforge mcp discover --config ./my-config.json
+        skillforge mcp discover --server my-server
+    """
+    from skillforge.mcp.client import (
+        discover_tools_from_config,
+        get_claude_desktop_config_path,
+        list_configured_servers,
+        MCPClientError,
+    )
+
+    # Get config path
+    if config_path is None:
+        config_path = get_claude_desktop_config_path()
+        if config_path is None:
+            console.print("[yellow]Claude Desktop config not found[/yellow]")
+            console.print("[dim]Specify config with --config[/dim]")
+            raise typer.Exit(code=1)
+
+    console.print(f"[dim]Using config: {config_path}[/dim]")
+    console.print()
+
+    # List servers
+    servers = list_configured_servers(config_path)
+    if not servers:
+        console.print("[yellow]No MCP servers configured[/yellow]")
+        return
+
+    console.print(f"[bold]Configured servers:[/bold]")
+    for server in servers:
+        console.print(f"  • {server.name}")
+    console.print()
+
+    # Discover tools
+    try:
+        console.print("[dim]Querying servers for tools...[/dim]")
+        tools = discover_tools_from_config(config_path, server_name)
+
+        if not tools:
+            console.print("[yellow]No tools found[/yellow]")
+            return
+
+        console.print()
+        console.print(f"[bold]Discovered tools:[/bold]")
+        console.print()
+
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("Tool", style="cyan")
+        table.add_column("Server", style="dim")
+        table.add_column("Description")
+
+        for tool in tools:
+            desc = tool.description[:40] + "..." if len(tool.description) > 40 else tool.description
+            table.add_row(tool.name, tool.server_name, desc)
+
+        console.print(table)
+        console.print()
+        console.print(f"[dim]Total: {len(tools)} tool(s)[/dim]")
+        console.print()
+        console.print("[dim]Import a tool: skillforge mcp import <tool-name> -o ./skills[/dim]")
+
+    except MCPClientError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=1)
+
+
+@mcp_app.command("import")
+def mcp_import(
+    tool_name: str = typer.Argument(..., help="Name of tool to import"),
+    output_dir: Path = typer.Option(
+        DEFAULT_SKILLS_DIR,
+        "--out",
+        "-o",
+        help="Output directory for the skill",
+    ),
+    config_path: Optional[Path] = typer.Option(
+        None,
+        "--config",
+        "-c",
+        help="Path to MCP config file",
+    ),
+    server_name: Optional[str] = typer.Option(
+        None,
+        "--server",
+        "-s",
+        help="Server to import from",
+    ),
+) -> None:
+    """Import an MCP tool as a SkillForge skill.
+
+    Converts an MCP tool definition to a skill and saves it locally.
+
+    Example:
+
+    \b
+        skillforge mcp import read-file -o ./skills
+        skillforge mcp import my-tool --server my-server
+    """
+    from skillforge.mcp.client import (
+        import_tool_by_name,
+        get_claude_desktop_config_path,
+        MCPClientError,
+    )
+
+    # Get config path
+    if config_path is None:
+        config_path = get_claude_desktop_config_path()
+        if config_path is None:
+            console.print("[yellow]Claude Desktop config not found[/yellow]")
+            console.print("[dim]Specify config with --config[/dim]")
+            raise typer.Exit(code=1)
+
+    try:
+        console.print(f"[dim]Searching for tool: {tool_name}[/dim]")
+
+        skill_dir = import_tool_by_name(
+            tool_name=tool_name,
+            config_path=config_path,
+            output_dir=output_dir,
+            server_name=server_name,
+        )
+
+        console.print()
+        console.print(f"[green]✓ Imported skill:[/green] {skill_dir}")
+        console.print()
+        console.print("[dim]Next steps:[/dim]")
+        console.print(f"  skillforge validate {skill_dir}")
+        console.print(f"  skillforge install {skill_dir}")
+
+    except MCPClientError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=1)
+
+
+@mcp_app.command("config")
+def mcp_config(
+    server_dir: Path = typer.Argument(..., help="Path to MCP server directory"),
+) -> None:
+    """Show MCP client configuration for a server.
+
+    Outputs the JSON configuration snippet that can be added to
+    Claude Desktop's config file or other MCP clients.
+
+    Example:
+
+    \b
+        skillforge mcp config ./my-server
+    """
+    from skillforge.mcp.server import load_server, MCPServerError
+    import json
+
+    try:
+        project = load_server(server_dir)
+        mcp_config = project.get_mcp_config()
+
+        console.print()
+        console.print("[bold]Add to Claude Desktop config:[/bold]")
+        console.print()
+
+        config_json = json.dumps(mcp_config, indent=2)
+        from rich.syntax import Syntax
+        console.print(Syntax(config_json, "json", theme="monokai"))
+
+        console.print()
+        console.print("[dim]Config location:[/dim]")
+        console.print("  macOS: ~/Library/Application Support/Claude/claude_desktop_config.json")
+        console.print("  Windows: %APPDATA%/Claude/claude_desktop_config.json")
+        console.print("  Linux: ~/.config/Claude/claude_desktop_config.json")
+
+    except MCPServerError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=1)
+
+
 if __name__ == "__main__":
     app()
