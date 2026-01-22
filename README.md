@@ -4,6 +4,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Tests](https://github.com/lhassa8/skillforge/actions/workflows/tests.yml/badge.svg)](https://github.com/lhassa8/skillforge/actions/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/lhassa8/skillforge/branch/main/graph/badge.svg)](https://codecov.io/gh/lhassa8/skillforge)
 
 **SkillForge** is the enterprise-grade platform for [Anthropic Agent Skills](https://docs.anthropic.com/en/docs/agents-and-tools/agent-skills) — custom instruction sets that extend Claude's capabilities for specific tasks.
 
