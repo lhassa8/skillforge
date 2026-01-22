@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
@@ -4252,6 +4253,505 @@ def analytics_estimate(
     console.print(table)
     console.print()
     console.print(f"[dim]Based on {daily_invocations} invocations/day, {input_tokens} input + {output_tokens} output tokens each[/dim]")
+
+
+# =============================================================================
+# Migration Commands
+# =============================================================================
+
+migrate_app = typer.Typer(help="Migrate skills between SkillForge versions")
+app.add_typer(migrate_app, name="migrate")
+
+
+@migrate_app.command("check")
+def migrate_check(
+    path: Path = typer.Argument(
+        ...,
+        help="Skill directory or parent directory to check",
+    ),
+    recursive: bool = typer.Option(
+        False,
+        "--recursive",
+        "-r",
+        help="Search recursively for skills",
+    ),
+) -> None:
+    """Check which skills need migration.
+
+    Scans for skills that are not at the latest format version.
+
+    Example:
+
+    \b
+        skillforge migrate check ./skills
+        skillforge migrate check ./my-skill
+        skillforge migrate check . --recursive
+    """
+    from skillforge.migrate import (
+        detect_format,
+        list_migrations_needed,
+        get_format_info,
+        SkillFormat,
+    )
+
+    path = Path(path).resolve()
+
+    # Single skill or directory?
+    if (path / "SKILL.md").exists():
+        # Single skill
+        format = detect_format(path)
+        format_info = get_format_info(format)
+
+        console.print()
+        console.print(f"[bold]Skill: {path.name}[/bold]")
+        console.print(f"Format: {format_info['name']}")
+
+        if format == SkillFormat.V1_0:
+            console.print("[green]✓ Already at latest format[/green]")
+        elif format == SkillFormat.UNKNOWN:
+            console.print("[red]✗ Unknown or invalid format[/red]")
+        else:
+            console.print("[yellow]⚠ Migration available[/yellow]")
+            console.print(f"Run: [cyan]skillforge migrate run {path}[/cyan]")
+    else:
+        # Directory of skills
+        needs_migration = list_migrations_needed(path, recursive=recursive)
+
+        console.print()
+        if not needs_migration:
+            console.print("[green]✓ All skills are at latest format[/green]")
+            return
+
+        console.print(f"[yellow]Found {len(needs_migration)} skill(s) needing migration:[/yellow]")
+        console.print()
+
+        table = Table()
+        table.add_column("Skill", style="cyan")
+        table.add_column("Current Format")
+        table.add_column("Path", style="dim")
+
+        for skill_path, format in needs_migration:
+            format_info = get_format_info(format)
+            table.add_row(skill_path.name, format_info["name"], str(skill_path))
+
+        console.print(table)
+        console.print()
+        console.print(f"Run: [cyan]skillforge migrate run {path}[/cyan] to migrate all")
+
+
+@migrate_app.command("run")
+def migrate_run(
+    path: Path = typer.Argument(
+        ...,
+        help="Skill directory or parent directory to migrate",
+    ),
+    recursive: bool = typer.Option(
+        False,
+        "--recursive",
+        "-r",
+        help="Search recursively for skills",
+    ),
+    no_backup: bool = typer.Option(
+        False,
+        "--no-backup",
+        help="Skip creating backups",
+    ),
+    backup_dir: Optional[Path] = typer.Option(
+        None,
+        "--backup-dir",
+        help="Directory for backups",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Show what would be changed without making changes",
+    ),
+) -> None:
+    """Migrate skills to the latest format.
+
+    Upgrades skill metadata to v1.0 format with full features.
+    Creates backups by default (use --no-backup to skip).
+
+    Example:
+
+    \b
+        skillforge migrate run ./my-skill
+        skillforge migrate run ./skills --recursive
+        skillforge migrate run ./skill --dry-run
+    """
+    from skillforge.migrate import (
+        migrate_skill,
+        migrate_directory,
+        get_migration_preview,
+        SkillFormat,
+    )
+
+    path = Path(path).resolve()
+
+    # Dry run - just show preview
+    if dry_run:
+        if (path / "SKILL.md").exists():
+            preview = get_migration_preview(path)
+            console.print()
+            console.print(f"[bold]Migration Preview: {path.name}[/bold]")
+            console.print(f"Current: {preview['current_format']} → Target: {preview['target_format']}")
+            console.print()
+            if preview["planned_changes"]:
+                console.print("[dim]Planned changes:[/dim]")
+                for change in preview["planned_changes"]:
+                    console.print(f"  • {change}")
+        else:
+            console.print("[yellow]Dry run for directories not yet implemented[/yellow]")
+        return
+
+    # Single skill or directory?
+    if (path / "SKILL.md").exists():
+        # Single skill
+        result = migrate_skill(
+            path,
+            create_backup_flag=not no_backup,
+            backup_dir=backup_dir,
+        )
+
+        console.print()
+        if result.success:
+            console.print(f"[green]✓ Migrated {result.skill_name}[/green]")
+            if result.changes:
+                console.print("[dim]Changes:[/dim]")
+                for change in result.changes:
+                    console.print(f"  • {change}")
+            if result.backup_path:
+                console.print(f"[dim]Backup: {result.backup_path}[/dim]")
+        else:
+            console.print(f"[red]✗ Migration failed: {result.error}[/red]")
+            raise typer.Exit(1)
+    else:
+        # Directory of skills
+        result = migrate_directory(
+            path,
+            create_backup_flag=not no_backup,
+            backup_dir=backup_dir,
+            recursive=recursive,
+        )
+
+        console.print()
+        console.print(f"[bold]Migration Complete[/bold]")
+        console.print(f"Total: {result.total}")
+        console.print(f"[green]Successful: {result.successful}[/green]")
+        console.print(f"[yellow]Skipped: {result.skipped}[/yellow]")
+        console.print(f"[red]Failed: {result.failed}[/red]")
+
+        if result.failed > 0:
+            console.print()
+            console.print("[red]Failed migrations:[/red]")
+            for r in result.results:
+                if not r.success:
+                    console.print(f"  • {r.skill_name}: {r.error}")
+            raise typer.Exit(1)
+
+
+@migrate_app.command("preview")
+def migrate_preview(
+    path: Path = typer.Argument(
+        ...,
+        help="Skill directory to preview",
+    ),
+) -> None:
+    """Preview migration changes for a skill.
+
+    Shows what changes would be made without modifying files.
+
+    Example:
+
+    \b
+        skillforge migrate preview ./my-skill
+    """
+    from skillforge.migrate import get_migration_preview, get_format_info, SkillFormat
+
+    path = Path(path).resolve()
+
+    if not (path / "SKILL.md").exists():
+        console.print("[red]Error: Not a skill directory (no SKILL.md)[/red]")
+        raise typer.Exit(1)
+
+    preview = get_migration_preview(path)
+
+    console.print()
+    console.print(f"[bold]Migration Preview: {path.name}[/bold]")
+    console.print()
+
+    current_info = get_format_info(SkillFormat(preview["current_format"]))
+    target_info = get_format_info(SkillFormat(preview["target_format"]))
+
+    console.print(f"Current Format: {current_info['name']}")
+    console.print(f"Target Format:  {target_info['name']}")
+    console.print()
+
+    if preview["needs_migration"]:
+        console.print("[yellow]Planned Changes:[/yellow]")
+        for change in preview["planned_changes"]:
+            console.print(f"  • {change}")
+    else:
+        console.print("[green]✓ No migration needed[/green]")
+
+
+# =============================================================================
+# Config Commands
+# =============================================================================
+
+config_app = typer.Typer(help="Manage SkillForge configuration")
+app.add_typer(config_app, name="config")
+
+
+@config_app.command("show")
+def config_show(
+    key: Optional[str] = typer.Argument(
+        None,
+        help="Configuration key to show (e.g., 'default_model')",
+    ),
+) -> None:
+    """Show current configuration.
+
+    Displays merged configuration from all sources.
+
+    Example:
+
+    \b
+        skillforge config show
+        skillforge config show default_model
+        skillforge config show proxy
+    """
+    from skillforge.config import get_config
+
+    config = get_config()
+    config_dict = config.to_dict()
+
+    console.print()
+
+    if key:
+        # Show specific key
+        if key in config_dict:
+            value = config_dict[key]
+            if isinstance(value, dict):
+                console.print(f"[bold]{key}:[/bold]")
+                for k, v in value.items():
+                    console.print(f"  {k}: {v}")
+            else:
+                console.print(f"{key}: {value}")
+        else:
+            console.print(f"[red]Unknown config key: {key}[/red]")
+            console.print(f"[dim]Available: {', '.join(config_dict.keys())}[/dim]")
+            raise typer.Exit(1)
+    else:
+        # Show all
+        console.print("[bold]SkillForge Configuration[/bold]")
+        console.print()
+
+        for section, value in config_dict.items():
+            if isinstance(value, dict):
+                console.print(f"[cyan]{section}:[/cyan]")
+                for k, v in value.items():
+                    if v is not None:
+                        console.print(f"  {k}: {v}")
+            else:
+                console.print(f"[cyan]{section}:[/cyan] {value}")
+
+
+@config_app.command("set")
+def config_set(
+    key: str = typer.Argument(
+        ...,
+        help="Configuration key (e.g., 'default_model')",
+    ),
+    value: str = typer.Argument(
+        ...,
+        help="Value to set",
+    ),
+    scope: str = typer.Option(
+        "user",
+        "--scope",
+        "-s",
+        help="Config scope: user or project",
+    ),
+) -> None:
+    """Set a configuration value.
+
+    Example:
+
+    \b
+        skillforge config set default_model claude-opus-4
+        skillforge config set color_output false
+        skillforge config set default_model gpt-4o --scope project
+    """
+    from skillforge.config import (
+        get_config,
+        save_user_config,
+        save_project_config,
+        load_config_file,
+        get_user_config_path,
+        get_project_config_path,
+    )
+
+    # Load current config
+    if scope == "user":
+        config_path = get_user_config_path()
+    elif scope == "project":
+        config_path = get_project_config_path()
+    else:
+        console.print(f"[red]Invalid scope: {scope}. Use 'user' or 'project'[/red]")
+        raise typer.Exit(1)
+
+    config_dict = load_config_file(config_path)
+
+    # Handle nested keys (e.g., proxy.http_proxy)
+    if "." in key:
+        parts = key.split(".")
+        current = config_dict
+        for part in parts[:-1]:
+            if part not in current:
+                current[part] = {}
+            current = current[part]
+        current[parts[-1]] = value
+    else:
+        # Parse value
+        if value.lower() in ("true", "yes", "1"):
+            value = True
+        elif value.lower() in ("false", "no", "0"):
+            value = False
+        elif value.isdigit():
+            value = int(value)
+
+        config_dict[key] = value
+
+    # Save
+    from skillforge.config import save_config_file
+    save_config_file(config_path, config_dict)
+
+    console.print(f"[green]✓ Set {key} = {value} in {scope} config[/green]")
+
+
+@config_app.command("path")
+def config_path(
+    scope: str = typer.Option(
+        "all",
+        "--scope",
+        "-s",
+        help="Config scope: user, project, or all",
+    ),
+) -> None:
+    """Show configuration file paths.
+
+    Example:
+
+    \b
+        skillforge config path
+        skillforge config path --scope user
+    """
+    from skillforge.config import get_user_config_path, get_project_config_path
+
+    console.print()
+
+    if scope in ("all", "user"):
+        user_path = get_user_config_path()
+        exists = "[green]exists[/green]" if user_path.exists() else "[dim]not created[/dim]"
+        console.print(f"User config:    {user_path} ({exists})")
+
+    if scope in ("all", "project"):
+        project_path = get_project_config_path()
+        exists = "[green]exists[/green]" if project_path.exists() else "[dim]not created[/dim]"
+        console.print(f"Project config: {project_path} ({exists})")
+
+
+@config_app.command("init")
+def config_init(
+    scope: str = typer.Option(
+        "user",
+        "--scope",
+        "-s",
+        help="Config scope: user or project",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help="Overwrite existing config",
+    ),
+) -> None:
+    """Initialize a configuration file with defaults.
+
+    Example:
+
+    \b
+        skillforge config init
+        skillforge config init --scope project
+    """
+    from skillforge.config import (
+        SkillForgeConfig,
+        save_user_config,
+        save_project_config,
+        get_user_config_path,
+        get_project_config_path,
+    )
+
+    if scope == "user":
+        config_path = get_user_config_path()
+        save_func = save_user_config
+    elif scope == "project":
+        config_path = get_project_config_path()
+        save_func = save_project_config
+    else:
+        console.print(f"[red]Invalid scope: {scope}[/red]")
+        raise typer.Exit(1)
+
+    if config_path.exists() and not force:
+        console.print(f"[yellow]Config already exists: {config_path}[/yellow]")
+        console.print("Use --force to overwrite")
+        raise typer.Exit(1)
+
+    # Create default config
+    config = SkillForgeConfig()
+    save_func(config)
+
+    console.print(f"[green]✓ Created {scope} config: {config_path}[/green]")
+
+
+# =============================================================================
+# Info Command
+# =============================================================================
+
+
+@app.command("info")
+def info() -> None:
+    """Show detailed SkillForge information.
+
+    Displays version, paths, and configuration summary.
+
+    Example:
+
+    \b
+        skillforge info
+    """
+    from skillforge import __version__
+    from skillforge.config import get_config, get_skills_directory, get_cache_directory
+    from skillforge.claude_code import USER_SKILLS_DIR
+
+    console.print()
+    console.print("[bold]SkillForge[/bold]")
+    console.print(f"Version: {__version__}")
+    console.print()
+
+    console.print("[bold]Paths:[/bold]")
+    console.print(f"  Skills:  {get_skills_directory()}")
+    console.print(f"  Cache:   {get_cache_directory()}")
+    console.print(f"  Claude:  {USER_SKILLS_DIR}")
+    console.print()
+
+    config = get_config()
+    console.print("[bold]Configuration:[/bold]")
+    console.print(f"  Model:    {config.default_model}")
+    console.print(f"  Provider: {config.default_provider}")
+    console.print(f"  Auth:     {config.auth.provider.value}")
+    console.print(f"  Storage:  {config.storage.backend.value}")
 
 
 if __name__ == "__main__":

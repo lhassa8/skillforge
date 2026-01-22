@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-01-22
+
+### Added
+
+- **Production Release** - SkillForge is now production-ready
+
+- **Enterprise Configuration** - Full enterprise deployment support
+  - SSO authentication support (SAML, OIDC)
+  - Cloud storage backends (S3, GCS, Azure Blob)
+  - Proxy configuration with SSL verification options
+  - Telemetry and logging configuration
+  - Environment variable overrides with `SKILLFORGE_` prefix
+  - User and project-level configuration files
+
+- **Configuration CLI Commands**
+  - `skillforge config show` - Display current configuration
+  - `skillforge config set <key> <value>` - Set configuration values
+  - `skillforge config path` - Show configuration file locations
+  - `skillforge config init` - Create configuration files (user/project)
+
+- **Migration Tools** - Upgrade skills from older formats
+  - Auto-detect skill format versions (v0.1, v0.9, v1.0)
+  - `skillforge migrate check ./skills` - List skills needing migration
+  - `skillforge migrate run ./skills/my-skill` - Migrate a skill to v1.0
+  - `skillforge migrate preview ./skills/my-skill` - Preview changes
+  - Automatic backup creation before migration
+  - Batch directory migration support
+  - Post-migration validation
+
+- **Stable Public API** - `skillforge.api` module
+  - Comprehensive exports of all public classes and functions
+  - `__version__` and `__api_version__` for version tracking
+  - `deprecated()` decorator for managing API deprecations
+  - Semantic versioning guarantees for all exported APIs
+
+- **Enhanced Doctor Command**
+  - `skillforge doctor` - Check installation and environment
+  - `skillforge info` - Show detailed SkillForge information
+
+- **Programmatic Configuration API**
+  - `skillforge.config` module:
+    - `SkillForgeConfig`, `ProxyConfig`, `AuthConfig`, `StorageConfig`, `TelemetryConfig`
+    - `AuthProvider` enum (NONE, API_KEY, OAUTH, SSO_SAML, SSO_OIDC)
+    - `StorageBackend` enum (LOCAL, S3, GCS, AZURE_BLOB)
+    - `LogLevel` enum (DEBUG, INFO, WARNING, ERROR)
+    - `get_config()`, `set_config()`, `reset_config()`, `save_user_config()`
+    - `load_config_file()`, `save_config_file()`, `merge_configs()`
+    - `load_env_overrides()`, `validate_config()`
+    - `get_skills_directory()`, `get_cache_directory()`, `is_enterprise_mode()`
+
+- **Programmatic Migration API**
+  - `skillforge.migrate` module:
+    - `SkillFormat` enum (UNKNOWN, V0_1, V0_9, V1_0)
+    - `MigrationResult`, `BatchMigrationResult` dataclasses
+    - `detect_format()`, `get_format_info()`
+    - `migrate_skill()`, `migrate_directory()`
+    - `create_backup()`, `validate_migration()`
+    - `list_migrations_needed()`, `get_migration_preview()`
+
+### Changed
+
+- Updated default model to `claude-sonnet-4-20250514`
+- All public APIs are now stable with deprecation warnings before removal
+- Skill format now supports `schema_version` field for future compatibility
+
 ## [0.12.0] - 2026-01-22
 
 ### Added
