@@ -1,6 +1,6 @@
 """SkillForge - Create, validate, and bundle Anthropic Agent Skills."""
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 
 from skillforge.skill import (
     Skill,
@@ -85,6 +85,16 @@ from skillforge.tester import (
     TestDefinitionError,
     TestExecutionError,
 )
+from skillforge.composer import (
+    compose_skill,
+    get_includes,
+    resolve_includes,
+    validate_composition,
+    has_includes,
+    CompositionResult,
+    CompositionError,
+    CircularDependencyError,
+)
 
 __all__ = [
     # Version
@@ -163,4 +173,13 @@ __all__ = [
     "SkillTestError",
     "TestDefinitionError",
     "TestExecutionError",
+    # Composition
+    "compose_skill",
+    "get_includes",
+    "resolve_includes",
+    "validate_composition",
+    "has_includes",
+    "CompositionResult",
+    "CompositionError",
+    "CircularDependencyError",
 ]

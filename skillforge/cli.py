@@ -137,6 +137,7 @@ def validate(
 
     Checks that the skill has valid YAML frontmatter, meets Anthropic's
     requirements for name and description, and follows best practices.
+    For composite skills, also validates that all includes exist.
 
     Example:
 
@@ -145,6 +146,7 @@ def validate(
         skillforge validate ./skills/my-skill --strict
     """
     from skillforge.validator import validate_skill_directory
+    from skillforge.composer import validate_composition, has_includes
 
     skill_path = Path(skill_path)
     result = validate_skill_directory(skill_path)
@@ -154,12 +156,22 @@ def validate(
     if result.skill:
         console.print(f"[bold]Skill:[/bold] {result.skill.name}")
         console.print(f"[bold]Description:[/bold] {result.skill.description[:60]}...")
+        if result.skill.includes:
+            console.print(f"[bold]Includes:[/bold] {len(result.skill.includes)} skill(s)")
         console.print()
 
+    # Validate composition if skill has includes
+    composition_errors: list[str] = []
+    if has_includes(skill_path):
+        composition_errors = validate_composition(skill_path)
+
+    # Combine all errors
+    all_errors = result.errors + composition_errors
+
     # Show errors
-    if result.errors:
+    if all_errors:
         console.print("[red bold]Errors:[/red bold]")
-        for msg in result.errors:
+        for msg in all_errors:
             console.print(f"  [red]✗[/red] {msg}")
         console.print()
 
@@ -171,7 +183,8 @@ def validate(
         console.print()
 
     # Summary
-    if result.valid and not (strict and result.warnings):
+    is_valid = result.valid and not composition_errors
+    if is_valid and not (strict and result.warnings):
         console.print("[green]✓ Skill is valid[/green]")
     else:
         if strict and result.warnings:
@@ -199,6 +212,7 @@ def bundle(
     """Bundle a skill into a zip file for upload.
 
     Creates a zip file that can be uploaded to claude.ai or via the API.
+    For composite skills with includes, automatically composes before bundling.
 
     Example:
 
@@ -206,37 +220,65 @@ def bundle(
         skillforge bundle ./skills/my-skill
         skillforge bundle ./skills/my-skill -o my-skill.zip
     """
+    import tempfile
     from skillforge.bundler import bundle_skill
+    from skillforge.composer import compose_skill, has_includes
 
     skill_path = Path(skill_path)
 
     console.print(f"[dim]Bundling skill: {skill_path}[/dim]")
 
-    result = bundle_skill(
-        skill_dir=skill_path,
-        output_path=output,
-        validate=not no_validate,
-    )
+    # Check if skill has includes - if so, compose first
+    bundle_path = skill_path
+    temp_dir = None
 
-    if not result.success:
-        console.print(f"[red]Error:[/red] {result.error_message}")
+    if has_includes(skill_path):
+        console.print("[dim]Composing skill (resolving includes)...[/dim]")
+        result = compose_skill(skill_path)
 
-        if result.validation and result.validation.errors:
-            console.print()
-            console.print("[red]Validation errors:[/red]")
-            for msg in result.validation.errors:
-                console.print(f"  [red]✗[/red] {msg}")
+        if not result.success:
+            console.print(f"[red]Error composing skill:[/red] {result.error}")
+            raise typer.Exit(code=1)
 
-        raise typer.Exit(code=1)
+        console.print(f"[dim]Included: {', '.join(result.included_skills)}[/dim]")
 
-    console.print()
-    console.print(f"[green]✓ Bundle created:[/green] {result.output_path}")
-    console.print(f"  Files: {result.file_count}")
-    console.print(f"  Size: {result.total_size:,} bytes")
-    console.print()
-    console.print("[bold]Upload to:[/bold]")
-    console.print("  • claude.ai: Settings → Features → Upload Skill")
-    console.print("  • API: POST /v1/skills with the zip file")
+        # Write composed skill to temp directory
+        temp_dir = tempfile.mkdtemp()
+        bundle_path = Path(temp_dir)
+        (bundle_path / "SKILL.md").write_text(result.composed_content)
+
+    try:
+        result = bundle_skill(
+            skill_dir=bundle_path,
+            output_path=output,
+            validate=not no_validate,
+        )
+
+        if not result.success:
+            console.print(f"[red]Error:[/red] {result.error_message}")
+
+            if result.validation and result.validation.errors:
+                console.print()
+                console.print("[red]Validation errors:[/red]")
+                for msg in result.validation.errors:
+                    console.print(f"  [red]✗[/red] {msg}")
+
+            raise typer.Exit(code=1)
+
+        console.print()
+        console.print(f"[green]✓ Bundle created:[/green] {result.output_path}")
+        console.print(f"  Files: {result.file_count}")
+        console.print(f"  Size: {result.total_size:,} bytes")
+        console.print()
+        console.print("[bold]Upload to:[/bold]")
+        console.print("  • claude.ai: Settings → Features → Upload Skill")
+        console.print("  • API: POST /v1/skills with the zip file")
+
+    finally:
+        # Cleanup temp directory
+        if temp_dir:
+            import shutil
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 @app.command()
@@ -506,7 +548,7 @@ def preview(
     """Preview how a skill will appear to Claude.
 
     Shows the SKILL.md content as Claude would see it when the skill
-    is triggered.
+    is triggered. For composite skills with includes, shows the composed version.
 
     Example:
 
@@ -514,6 +556,7 @@ def preview(
         skillforge preview ./skills/my-skill
     """
     from skillforge.skill import Skill, SkillParseError
+    from skillforge.composer import compose_skill, has_includes
 
     skill_path = Path(skill_path)
 
@@ -522,6 +565,16 @@ def preview(
     except SkillParseError as e:
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(code=1)
+
+    # Check if skill has includes
+    is_composite = has_includes(skill_path)
+    if is_composite:
+        result = compose_skill(skill_path)
+        if result.success and result.skill:
+            skill = result.skill
+            console.print()
+            console.print(f"[yellow]Note:[/yellow] This skill includes {len(result.included_skills)} other skill(s)")
+            console.print(f"[dim]Included: {', '.join(result.included_skills)}[/dim]")
 
     console.print()
     console.print("[bold]System Prompt Entry:[/bold]")
@@ -542,6 +595,98 @@ def preview(
         line_numbers=True,
     )
     console.print(syntax)
+
+
+@app.command()
+def compose(
+    skill_path: Path = typer.Argument(..., help="Path to composite skill"),
+    output: Optional[Path] = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Output directory for composed skill",
+    ),
+    preview_only: bool = typer.Option(
+        False,
+        "--preview",
+        "-p",
+        help="Preview composed skill without writing",
+    ),
+) -> None:
+    """Compose a skill by resolving includes.
+
+    Takes a skill with `includes` in frontmatter and produces a single
+    composed skill with all included content merged.
+
+    Example:
+
+    \b
+        skillforge compose ./skills/full-stack-reviewer
+        skillforge compose ./skills/my-composite --output ./skills/composed
+        skillforge compose ./skills/my-skill --preview
+    """
+    from skillforge.composer import compose_skill, CompositionError, has_includes
+
+    skill_path = Path(skill_path)
+
+    if not skill_path.exists():
+        console.print(f"[red]Error:[/red] Skill not found: {skill_path}")
+        raise typer.Exit(code=1)
+
+    # Check if skill has includes
+    if not has_includes(skill_path):
+        console.print(f"[yellow]Note:[/yellow] Skill has no includes")
+        console.print("[dim]Nothing to compose - skill is already standalone[/dim]")
+        raise typer.Exit(code=0)
+
+    console.print(f"[dim]Composing skill: {skill_path.name}[/dim]")
+    console.print()
+
+    # Compose the skill
+    result = compose_skill(
+        skill_path,
+        output_path=None if preview_only else output,
+    )
+
+    if not result.success:
+        console.print(f"[red]Error:[/red] {result.error}")
+        raise typer.Exit(code=1)
+
+    # Show resolved includes
+    console.print("[bold]Resolved includes:[/bold]")
+    for name in result.included_skills:
+        console.print(f"  [green]✓[/green] {name}")
+
+    console.print()
+
+    if preview_only:
+        # Show preview
+        console.print("[bold]Composed Skill Preview:[/bold]")
+        console.print()
+        syntax = Syntax(
+            result.composed_content,
+            "markdown",
+            theme="monokai",
+            line_numbers=True,
+        )
+        console.print(syntax)
+        console.print()
+        console.print("[dim]Use --output to write composed skill[/dim]")
+    else:
+        # Write to output
+        if output is None:
+            # Default output path
+            output = skill_path.parent / f"{skill_path.name}-composed"
+
+        output.mkdir(parents=True, exist_ok=True)
+        skill_md_path = output / "SKILL.md"
+        skill_md_path.write_text(result.composed_content)
+
+        console.print(f"[green]✓ Composed skill:[/green] {result.skill.name if result.skill else 'unknown'}")
+        console.print(f"  Included: {len(result.included_skills)} skill(s)")
+        console.print(f"  Output: {output}")
+        console.print()
+        console.print(f"[dim]Preview with: skillforge preview {output}[/dim]")
 
 
 @app.command()

@@ -52,10 +52,17 @@ class Skill:
     additional_files: list[str] = field(default_factory=list)
     scripts: list[str] = field(default_factory=list)
 
+    # Skill composition - paths to included skills
+    includes: list[str] = field(default_factory=list)
+
     def to_skill_md(self) -> str:
         """Generate SKILL.md content."""
+        data: dict = {"name": self.name, "description": self.description}
+        if self.includes:
+            data["includes"] = self.includes
+
         frontmatter = yaml.dump(
-            {"name": self.name, "description": self.description},
+            data,
             default_flow_style=False,
             allow_unicode=True,
             sort_keys=False,
@@ -96,17 +103,23 @@ class Skill:
 
         name = frontmatter.get("name")
         description = frontmatter.get("description")
+        includes = frontmatter.get("includes", [])
 
         if not name:
             raise SkillParseError("Missing required field: name")
         if not description:
             raise SkillParseError("Missing required field: description")
 
+        # Validate includes is a list
+        if not isinstance(includes, list):
+            includes = [includes] if includes else []
+
         skill = cls(
             name=name,
             description=description,
             content=body,
             path=path,
+            includes=includes,
         )
 
         # Discover additional files if path is provided

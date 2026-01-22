@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2025-01-22
+
+### Added
+
+- **Skill Composition** - Combine multiple skills into composite skills
+  - `skillforge compose ./skills/my-composite` - Compose a skill by resolving includes
+  - `skillforge compose ./skills/my-composite --preview` - Preview composed skill without writing
+  - `skillforge compose ./skills/my-composite --output ./skills/composed` - Write to specific directory
+  - Add `includes` field to SKILL.md frontmatter to reference other skills
+  - Circular dependency detection and prevention
+  - Automatic composition before bundling for composite skills
+
+- **Programmatic Composition API**
+  - `compose_skill()` function for composing skills programmatically
+  - `get_includes()`, `resolve_includes()` functions
+  - `validate_composition()` for validating composite skills
+  - `has_includes()` to check if a skill has includes
+  - `CompositionResult`, `CompositionError`, `CircularDependencyError` classes
+
+### Changed
+
+- `skillforge validate` now validates includes for composite skills
+- `skillforge preview` shows composed version for composite skills
+- `skillforge bundle` auto-composes before bundling if skill has includes
+
 ## [0.7.0] - 2025-01-22
 
 ### Added
