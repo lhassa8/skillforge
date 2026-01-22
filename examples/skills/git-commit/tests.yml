@@ -1,0 +1,43 @@
+version: "1.0"
+
+tests:
+  - name: "uses_conventional_format"
+    description: "Should use conventional commit format"
+    input: "I added user authentication"
+    assertions:
+      - type: regex
+        pattern: "^(feat|fix|docs|style|refactor|perf|test|chore)"
+      - type: contains
+        value: ":"
+    mock:
+      response: |
+        feat(auth): add user authentication
+
+        Implement login and logout functionality with session management.
+    tags: ["format"]
+
+  - name: "identifies_fix_type"
+    description: "Should use fix type for bug fixes"
+    input: "Fixed the login button not working"
+    assertions:
+      - type: starts_with
+        value: "fix"
+    mock:
+      response: |
+        fix(auth): resolve login button click handler
+
+        Fix event listener attachment for login button.
+    tags: ["type"]
+
+  - name: "suggests_breaking_change"
+    description: "Should indicate breaking changes"
+    input: "Changed the API to return JSON instead of XML"
+    assertions:
+      - type: regex
+        pattern: "(BREAKING|!:)"
+    mock:
+      response: |
+        feat(api)!: change response format from XML to JSON
+
+        BREAKING CHANGE: All API endpoints now return JSON.
+    tags: ["breaking"]

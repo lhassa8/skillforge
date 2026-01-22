@@ -1,0 +1,83 @@
+version: "1.0"
+
+defaults:
+  timeout: 30
+
+tests:
+  - name: "detects_sql_injection"
+    description: "Should identify SQL injection vulnerabilities"
+    input: |
+      Review this code:
+      ```python
+      def get_user(id):
+          query = f"SELECT * FROM users WHERE id = {id}"
+          return db.execute(query)
+      ```
+    assertions:
+      - type: contains
+        value: "SQL injection"
+        case_sensitive: false
+      - type: contains
+        value: "Critical"
+        case_sensitive: false
+      - type: regex
+        pattern: "parameterized|prepared|placeholder"
+    mock:
+      response: |
+        ## Summary
+        Critical security vulnerability found - SQL injection risk.
+
+        ## Issues Found
+
+        ### [Critical] SQL Injection Vulnerability
+        - **Problem**: User input directly in query
+        - **Fix**: Use parameterized queries
+    tags: ["security", "critical"]
+
+  - name: "provides_structured_feedback"
+    description: "Should use the defined response format"
+    input: "Review this function: def add(a, b): return a + b"
+    assertions:
+      - type: contains
+        value: "Summary"
+      - type: regex
+        pattern: "(Issues|Recommendations)"
+    mock:
+      response: |
+        ## Summary
+        Simple, clean function.
+
+        ## Issues Found
+        None.
+
+        ## Recommendations
+        - Add type hints
+        - Add docstring
+    tags: ["format"]
+
+  - name: "handles_clean_code"
+    description: "Should acknowledge good code"
+    input: |
+      Review this:
+      ```python
+      def calculate_total(items: list[dict]) -> float:
+          """Calculate total price."""
+          return sum(item['price'] * item['quantity'] for item in items)
+      ```
+    assertions:
+      - type: not_contains
+        value: "Critical"
+      - type: regex
+        pattern: "(clean|good|well)"
+        case_sensitive: false
+    mock:
+      response: |
+        ## Summary
+        Clean, well-written code with good practices.
+
+        ## Issues Found
+        No critical issues.
+
+        ## Recommendations
+        Consider using dataclasses for type safety.
+    tags: ["positive"]

@@ -52,7 +52,8 @@ Thumbs.db
 .env
 .env.local
 api_key.txt
-skills/
+/skills/
+!examples/skills/
 *.zip
 
 # Claude Code settings (may contain sensitive data)
