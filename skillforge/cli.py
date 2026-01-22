@@ -3745,5 +3745,514 @@ def governance_approve(
         console.print(f"  Notes: {notes}")
 
 
+# =============================================================================
+# Publish Commands (v0.12.0)
+# =============================================================================
+
+@app.command("publish")
+def publish(
+    skill_path: Path = typer.Argument(..., help="Path to skill directory"),
+    platform: str = typer.Option(
+        "claude",
+        "--platform",
+        "-p",
+        help="Target platform (claude, openai, langchain)",
+    ),
+    mode: Optional[str] = typer.Option(
+        None,
+        "--mode",
+        "-m",
+        help="Publish mode (platform-specific)",
+    ),
+    output_dir: Path = typer.Option(
+        Path("."),
+        "--out",
+        "-o",
+        help="Output directory for generated files",
+    ),
+    api_key: Optional[str] = typer.Option(
+        None,
+        "--api-key",
+        "-k",
+        help="API key for platform (if required)",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Validate without publishing",
+    ),
+    all_platforms: bool = typer.Option(
+        False,
+        "--all",
+        "-a",
+        help="Publish to all platforms",
+    ),
+) -> None:
+    """Publish a skill to an AI platform.
+
+    Transforms and publishes skills to various platforms:
+    - claude: Claude.ai Projects, API, or Claude Code
+    - openai: Custom GPTs, API, or Assistants
+    - langchain: Prompt templates, Hub, or Python modules
+
+    Example:
+
+    \b
+        skillforge publish ./skills/my-skill
+        skillforge publish ./skills/my-skill --platform openai --mode gpt
+        skillforge publish ./skills/my-skill --all --out ./published
+        skillforge publish ./skills/my-skill --dry-run
+    """
+    from skillforge.platforms import (
+        Platform,
+        get_platform,
+        publish_skill,
+        publish_to_all,
+        PublishError,
+    )
+
+    skill_path = Path(skill_path)
+
+    if not skill_path.exists():
+        console.print(f"[red]Skill not found:[/red] {skill_path}")
+        raise typer.Exit(code=1)
+
+    if all_platforms:
+        # Publish to all platforms
+        console.print(f"[dim]Publishing to all platforms...[/dim]")
+        console.print()
+
+        results = publish_to_all(skill_path, output_dir, dry_run)
+
+        for plat, result in results.items():
+            if result.published_id == "error":
+                console.print(f"[red]✗ {plat.value}:[/red] {result.metadata.get('error')}")
+            else:
+                console.print(f"[green]✓ {plat.value}:[/green] {result.published_id}")
+                if result.url:
+                    console.print(f"  [dim]{result.url}[/dim]")
+
+        return
+
+    # Single platform publish
+    try:
+        plat = get_platform(platform)
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=1)
+
+    try:
+        console.print(f"[dim]Publishing to {platform}...[/dim]")
+
+        result = publish_skill(
+            skill_path=skill_path,
+            platform=plat,
+            api_key=api_key,
+            mode=mode,
+            output_dir=output_dir,
+            dry_run=dry_run,
+        )
+
+        console.print()
+        if dry_run:
+            console.print(f"[yellow]Dry run completed[/yellow]")
+        else:
+            console.print(f"[green]✓ Published to {platform}[/green]")
+
+        console.print(f"  ID: {result.published_id}")
+        if result.version:
+            console.print(f"  Version: {result.version}")
+        if result.url:
+            console.print(f"  Location: {result.url}")
+
+        # Show platform-specific instructions
+        if "instructions" in result.metadata:
+            console.print()
+            console.print(f"[dim]{result.metadata['instructions']}[/dim]")
+
+    except PublishError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=1)
+
+
+@app.command("platforms")
+def platforms_list() -> None:
+    """List available publishing platforms.
+
+    Shows all platforms that skills can be published to.
+    """
+    from skillforge.platforms import list_adapters
+
+    console.print()
+    console.print("[bold]Available Platforms:[/bold]")
+    console.print()
+
+    for adapter in list_adapters():
+        console.print(f"[cyan]{adapter.platform.value}[/cyan]")
+        console.print(f"  {adapter.platform_name}")
+        console.print(f"  {adapter.platform_description}")
+        console.print(f"  Features: {', '.join(adapter.supported_features[:4])}")
+        console.print()
+
+
+# =============================================================================
+# Analytics Commands (v0.12.0)
+# =============================================================================
+
+analytics_app = typer.Typer(
+    name="analytics",
+    help="Usage tracking and analytics.",
+    no_args_is_help=True,
+)
+app.add_typer(analytics_app, name="analytics")
+
+
+@analytics_app.command("show")
+def analytics_show(
+    skill_name: str = typer.Argument(..., help="Name of skill to show analytics for"),
+    period: int = typer.Option(
+        30,
+        "--period",
+        "-p",
+        help="Number of days to analyze",
+    ),
+    output_format: str = typer.Option(
+        "text",
+        "--format",
+        "-f",
+        help="Output format (text, json)",
+    ),
+) -> None:
+    """Show analytics for a skill.
+
+    Displays usage metrics including invocations, success rate,
+    latency, and costs.
+
+    Example:
+
+    \b
+        skillforge analytics show code-reviewer
+        skillforge analytics show code-reviewer --period 7
+        skillforge analytics show code-reviewer --format json
+    """
+    from skillforge.analytics import get_skill_metrics
+    import json
+
+    metrics = get_skill_metrics(skill_name, period_days=period)
+
+    if output_format == "json":
+        console.print(json.dumps(metrics.to_dict(), indent=2))
+        return
+
+    console.print()
+    console.print(f"[bold]Analytics: {skill_name}[/bold]")
+    console.print(f"[dim]Period: Last {period} days[/dim]")
+    console.print()
+
+    if metrics.total_invocations == 0:
+        console.print("[yellow]No invocations recorded[/yellow]")
+        return
+
+    # Metrics table
+    table = Table(show_header=False, box=None)
+    table.add_column("Metric", style="dim")
+    table.add_column("Value")
+
+    table.add_row("Total Invocations", str(metrics.total_invocations))
+    table.add_row("Successful", f"{metrics.successful_invocations} ({metrics.success_rate:.1f}%)")
+    table.add_row("Failed", str(metrics.failed_invocations))
+    table.add_row("Avg Latency", f"{metrics.avg_latency_ms:.1f} ms")
+    table.add_row("Total Tokens", f"{metrics.total_tokens:,}")
+    table.add_row("Total Cost", f"${metrics.total_cost:.2f}")
+    table.add_row("Avg Cost/Invocation", f"${metrics.avg_cost:.4f}")
+
+    if metrics.first_invocation:
+        table.add_row("First Invocation", metrics.first_invocation.strftime("%Y-%m-%d %H:%M"))
+    if metrics.last_invocation:
+        table.add_row("Last Invocation", metrics.last_invocation.strftime("%Y-%m-%d %H:%M"))
+
+    console.print(table)
+
+
+@analytics_app.command("roi")
+def analytics_roi(
+    skill_name: str = typer.Argument(..., help="Name of skill to calculate ROI for"),
+    period: int = typer.Option(
+        30,
+        "--period",
+        "-p",
+        help="Number of days to analyze",
+    ),
+    time_saved: float = typer.Option(
+        5.0,
+        "--time-saved",
+        "-t",
+        help="Minutes saved per invocation",
+    ),
+    hourly_rate: float = typer.Option(
+        50.0,
+        "--rate",
+        "-r",
+        help="Hourly rate for value calculation (USD)",
+    ),
+) -> None:
+    """Calculate ROI for a skill.
+
+    Estimates return on investment based on time saved
+    and API costs.
+
+    Example:
+
+    \b
+        skillforge analytics roi code-reviewer
+        skillforge analytics roi code-reviewer --time-saved 10 --rate 75
+    """
+    from skillforge.analytics import calculate_roi
+
+    roi = calculate_roi(
+        skill_name=skill_name,
+        period_days=period,
+        time_saved_minutes=time_saved,
+        hourly_rate=hourly_rate,
+    )
+
+    console.print()
+    console.print(f"[bold]ROI Analysis: {skill_name}[/bold]")
+    console.print(f"[dim]Period: Last {period} days[/dim]")
+    console.print()
+
+    if roi.total_invocations == 0:
+        console.print("[yellow]No invocations recorded[/yellow]")
+        return
+
+    table = Table(show_header=False, box=None)
+    table.add_column("Metric", style="dim")
+    table.add_column("Value")
+
+    table.add_row("Total Invocations", str(roi.total_invocations))
+    table.add_row("Time Saved", f"{roi.estimated_time_saved_hours:.1f} hours")
+    table.add_row("Value of Time Saved", f"${roi.estimated_value:.2f}")
+    table.add_row("API Costs", f"${roi.total_cost:.2f}")
+    table.add_row("Net Value", f"${roi.net_value:.2f}")
+
+    roi_str = f"{roi.roi_percentage:.1f}%" if roi.roi_percentage != float("inf") else "∞"
+    roi_color = "green" if roi.roi_percentage > 0 else "red"
+    table.add_row("ROI", f"[{roi_color}]{roi_str}[/{roi_color}]")
+
+    console.print(table)
+    console.print()
+    console.print(f"[dim]Assumptions: {time_saved} min saved/invocation, ${hourly_rate}/hour[/dim]")
+
+
+@analytics_app.command("report")
+def analytics_report(
+    period: int = typer.Option(
+        30,
+        "--period",
+        "-p",
+        help="Number of days to include",
+    ),
+    output_format: str = typer.Option(
+        "text",
+        "--format",
+        "-f",
+        help="Output format (text, json)",
+    ),
+    output_file: Optional[Path] = typer.Option(
+        None,
+        "--out",
+        "-o",
+        help="Save report to file",
+    ),
+) -> None:
+    """Generate a usage report for all skills.
+
+    Shows aggregate metrics across all tracked skills.
+
+    Example:
+
+    \b
+        skillforge analytics report
+        skillforge analytics report --period 7
+        skillforge analytics report --format json --out report.json
+    """
+    from skillforge.analytics import generate_usage_report
+    import json
+
+    report = generate_usage_report(period_days=period)
+
+    if output_format == "json":
+        json_output = report.to_json()
+        if output_file:
+            output_file.write_text(json_output)
+            console.print(f"[green]✓ Report saved to:[/green] {output_file}")
+        else:
+            console.print(json_output)
+        return
+
+    console.print()
+    console.print("[bold]Usage Report[/bold]")
+    console.print(f"[dim]Period: {report.period_start.strftime('%Y-%m-%d')} to {report.period_end.strftime('%Y-%m-%d')}[/dim]")
+    console.print()
+
+    # Summary
+    console.print("[bold]Summary:[/bold]")
+    console.print(f"  Total Invocations: {report.total_invocations:,}")
+    console.print(f"  Total Cost: ${report.total_cost:.2f}")
+    console.print(f"  Total Tokens: {report.total_tokens:,}")
+    console.print(f"  Skills Tracked: {len(report.skill_metrics)}")
+    console.print()
+
+    # Status breakdown
+    if report.status_breakdown:
+        console.print("[bold]By Status:[/bold]")
+        for status, count in report.status_breakdown.items():
+            pct = (count / report.total_invocations * 100) if report.total_invocations > 0 else 0
+            console.print(f"  {status}: {count} ({pct:.1f}%)")
+        console.print()
+
+    # Top skills
+    if report.top_skills:
+        console.print("[bold]Top Skills:[/bold]")
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("Skill", style="cyan")
+        table.add_column("Invocations", justify="right")
+        table.add_column("Success Rate", justify="right")
+        table.add_column("Cost", justify="right")
+
+        for name, count in report.top_skills[:5]:
+            metrics = report.skill_metrics.get(name)
+            if metrics:
+                table.add_row(
+                    name,
+                    str(count),
+                    f"{metrics.success_rate:.1f}%",
+                    f"${metrics.total_cost:.2f}",
+                )
+
+        console.print(table)
+
+
+@analytics_app.command("cost")
+def analytics_cost(
+    skill_name: Optional[str] = typer.Argument(None, help="Skill name (optional, for all skills if omitted)"),
+    period: int = typer.Option(
+        30,
+        "--period",
+        "-p",
+        help="Number of days to analyze",
+    ),
+) -> None:
+    """Show cost breakdown for skills.
+
+    Displays detailed cost analysis including breakdown by model and day.
+
+    Example:
+
+    \b
+        skillforge analytics cost
+        skillforge analytics cost code-reviewer
+        skillforge analytics cost --period 7
+    """
+    from skillforge.analytics import generate_cost_breakdown
+
+    breakdown = generate_cost_breakdown(skill_name=skill_name, period_days=period)
+
+    console.print()
+    title = f"Cost Breakdown: {skill_name}" if skill_name else "Cost Breakdown: All Skills"
+    console.print(f"[bold]{title}[/bold]")
+    console.print(f"[dim]Period: Last {period} days[/dim]")
+    console.print()
+
+    if breakdown.total_cost == 0:
+        console.print("[yellow]No costs recorded[/yellow]")
+        return
+
+    console.print(f"[bold]Total Cost:[/bold] ${breakdown.total_cost:.4f}")
+    console.print(f"  Input Tokens: ${breakdown.input_cost:.4f}")
+    console.print(f"  Output Tokens: ${breakdown.output_cost:.4f}")
+    console.print(f"  Avg per Invocation: ${breakdown.avg_cost_per_invocation:.4f}")
+    console.print()
+
+    if breakdown.cost_by_model:
+        console.print("[bold]By Model:[/bold]")
+        for model, cost in sorted(breakdown.cost_by_model.items(), key=lambda x: -x[1]):
+            console.print(f"  {model}: ${cost:.4f}")
+        console.print()
+
+    if breakdown.cost_by_day:
+        console.print("[bold]Recent Days:[/bold]")
+        recent_days = list(breakdown.cost_by_day.items())[-7:]
+        for day, cost in recent_days:
+            console.print(f"  {day}: ${cost:.4f}")
+
+
+@analytics_app.command("estimate")
+def analytics_estimate(
+    skill_name: str = typer.Argument(..., help="Skill name"),
+    daily_invocations: int = typer.Option(
+        100,
+        "--daily",
+        "-d",
+        help="Expected daily invocations",
+    ),
+    input_tokens: int = typer.Option(
+        1000,
+        "--input-tokens",
+        "-i",
+        help="Average input tokens per invocation",
+    ),
+    output_tokens: int = typer.Option(
+        500,
+        "--output-tokens",
+        "-o",
+        help="Average output tokens per invocation",
+    ),
+    model: str = typer.Option(
+        "claude-sonnet-4-20250514",
+        "--model",
+        "-m",
+        help="Model for cost estimation",
+    ),
+) -> None:
+    """Estimate monthly costs for a skill.
+
+    Projects future costs based on expected usage.
+
+    Example:
+
+    \b
+        skillforge analytics estimate code-reviewer --daily 50
+        skillforge analytics estimate my-skill --daily 200 --model gpt-4o
+    """
+    from skillforge.analytics import estimate_monthly_cost
+
+    estimate = estimate_monthly_cost(
+        skill_name=skill_name,
+        expected_daily_invocations=daily_invocations,
+        avg_input_tokens=input_tokens,
+        avg_output_tokens=output_tokens,
+        model=model,
+    )
+
+    console.print()
+    console.print(f"[bold]Cost Estimate: {skill_name}[/bold]")
+    console.print(f"[dim]Model: {model}[/dim]")
+    console.print()
+
+    table = Table(show_header=False, box=None)
+    table.add_column("Period", style="dim")
+    table.add_column("Cost", justify="right")
+
+    table.add_row("Per Invocation", f"${estimate['per_invocation']:.4f}")
+    table.add_row("Daily", f"${estimate['daily_cost']:.2f}")
+    table.add_row("Weekly", f"${estimate['weekly_cost']:.2f}")
+    table.add_row("Monthly", f"${estimate['monthly_cost']:.2f}")
+
+    console.print(table)
+    console.print()
+    console.print(f"[dim]Based on {daily_invocations} invocations/day, {input_tokens} input + {output_tokens} output tokens each[/dim]")
+
+
 if __name__ == "__main__":
     app()

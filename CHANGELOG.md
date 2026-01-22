@@ -7,6 +7,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-01-22
+
+### Added
+
+- **Multi-Platform Publishing** - Deploy skills to Claude, OpenAI, and LangChain
+  - Platform adapter architecture for extensible multi-platform support
+  - Transform skills to platform-specific formats automatically
+  - Publish with dry-run mode for validation
+
+- **Claude Platform Adapter**
+  - Export skills as Claude API system prompts
+  - Generate claude.ai project knowledge format
+  - Publish to Claude Code (local installation)
+  - Support for API mode with configurable models
+
+- **OpenAI Platform Adapter**
+  - Generate Custom GPT configurations with conversation starters
+  - Export API-ready system prompts
+  - Create Assistants API configurations
+  - Auto-detect code interpreter and file search needs
+
+- **LangChain Platform Adapter**
+  - Generate PromptTemplate and ChatPromptTemplate formats
+  - Export as Python modules with full class definitions
+  - Export as JSON configuration files
+  - Push to LangChain Hub (with langchain-hub package)
+
+- **Platform CLI Commands**
+  - `skillforge publish ./skill --platform claude` - Publish to Claude
+  - `skillforge publish ./skill --platform openai --mode gpt` - Publish as Custom GPT
+  - `skillforge publish ./skill --platform langchain --mode module` - Python module
+  - `skillforge publish ./skill --all` - Publish to all platforms
+  - `skillforge publish --dry-run` - Validate without publishing
+  - `skillforge platforms` - List available platforms and features
+
+- **Analytics & Usage Tracking** - Monitor skill usage and calculate ROI
+  - Track skill invocations with latency, tokens, and costs
+  - Record success/failure status for each invocation
+  - Store analytics in JSON Lines format for easy processing
+
+- **ROI Calculation**
+  - Calculate return on investment based on time saved
+  - Configurable hourly rates and time-saved estimates
+  - Compare ROI across multiple skills
+
+- **Usage Reports**
+  - Generate comprehensive usage reports by period
+  - Top skills by invocations
+  - Cost breakdowns by model and day
+  - Monthly cost projections
+
+- **Analytics CLI Commands**
+  - `skillforge analytics show my-skill` - View skill metrics
+  - `skillforge analytics roi my-skill` - Calculate ROI
+  - `skillforge analytics report` - Generate usage report
+  - `skillforge analytics cost my-skill` - Cost breakdown
+  - `skillforge analytics estimate my-skill --daily 10` - Project costs
+
+- **Programmatic Analytics API**
+  - `skillforge.analytics.tracker` module:
+    - `UsageTracker`, `InvocationRecord`, `SkillMetrics`
+    - `record_success()`, `record_failure()`, `get_skill_metrics()`
+  - `skillforge.analytics.reports` module:
+    - `calculate_roi()`, `generate_usage_report()`, `generate_cost_breakdown()`
+    - `estimate_monthly_cost()`, `compare_skills()`
+    - `TOKEN_COSTS` dictionary with pricing for popular models
+
+- **Programmatic Platform API**
+  - `skillforge.platforms` module:
+    - `Platform` enum, `PlatformAdapter` ABC, `PlatformCredentials`
+    - `TransformResult`, `PublishResult` dataclasses
+    - `get_adapter()`, `list_adapters()`, `register_adapter()`
+    - `transform_skill()`, `publish_skill()`, `publish_to_all()`
+  - Platform adapters: `ClaudeAdapter`, `OpenAIAdapter`, `LangChainAdapter`
+
 ## [0.11.0] - 2026-01-22
 
 ### Added
