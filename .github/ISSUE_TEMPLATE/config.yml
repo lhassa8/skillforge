@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/lhassa8/skillforge#readme
+    about: Check the README for usage guides and examples
+  - name: Discussions
+    url: https://github.com/lhassa8/skillforge/discussions
+    about: Ask questions or share ideas in Discussions
