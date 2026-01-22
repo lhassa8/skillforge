@@ -1709,5 +1709,266 @@ def providers() -> None:
         console.print("[dim]Run: skillforge generate \"your skill description\"[/dim]")
 
 
+# =============================================================================
+# Registry Commands
+# =============================================================================
+
+registry_app = typer.Typer(
+    help="Manage skill registries",
+    no_args_is_help=True,
+)
+app.add_typer(registry_app, name="registry")
+
+
+@registry_app.command("add")
+def registry_add(
+    url: str = typer.Argument(..., help="GitHub repository URL for the registry"),
+    name: Optional[str] = typer.Option(
+        None,
+        "--name",
+        "-n",
+        help="Custom name for the registry",
+    ),
+) -> None:
+    """Add a skill registry.
+
+    Registries are GitHub repositories containing an index.json file
+    that lists available skills.
+
+    Example:
+
+    \b
+        skillforge registry add https://github.com/skillforge/community-skills
+        skillforge registry add https://github.com/mycompany/skills --name company
+    """
+    from skillforge.registry import add_registry, RegistryError
+
+    console.print(f"[dim]Fetching registry index...[/dim]")
+
+    try:
+        registry = add_registry(url, name)
+
+        console.print()
+        console.print(f"[green]✓ Added registry:[/green] {registry.name}")
+        console.print(f"  Skills: {len(registry.skills)}")
+        console.print(f"  URL: {registry.url}")
+
+    except RegistryError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=1)
+
+
+@registry_app.command("list")
+def registry_list_cmd() -> None:
+    """List configured registries.
+
+    Example:
+
+    \b
+        skillforge registry list
+    """
+    from skillforge.registry import list_registries
+
+    registries = list_registries()
+
+    if not registries:
+        console.print("[yellow]No registries configured[/yellow]")
+        console.print()
+        console.print("[dim]Add a registry with:[/dim]")
+        console.print("  skillforge registry add https://github.com/user/skills-registry")
+        return
+
+    console.print()
+    table = Table(title="Configured Registries", show_header=True, header_style="bold")
+    table.add_column("Name", style="cyan")
+    table.add_column("Skills", justify="right")
+    table.add_column("URL")
+
+    for reg in registries:
+        # Truncate URL if too long
+        url_display = reg.url
+        if len(url_display) > 45:
+            url_display = url_display[:42] + "..."
+        table.add_row(reg.name, str(len(reg.skills)), url_display)
+
+    console.print(table)
+    console.print()
+    console.print(f"[dim]Update indexes: skillforge registry update[/dim]")
+
+
+@registry_app.command("remove")
+def registry_remove_cmd(
+    name: str = typer.Argument(..., help="Name of the registry to remove"),
+) -> None:
+    """Remove a registry.
+
+    Example:
+
+    \b
+        skillforge registry remove community-skills
+    """
+    from skillforge.registry import remove_registry
+
+    if remove_registry(name):
+        console.print(f"[green]✓ Removed registry:[/green] {name}")
+    else:
+        console.print(f"[yellow]Registry not found:[/yellow] {name}")
+        raise typer.Exit(code=1)
+
+
+@registry_app.command("update")
+def registry_update_cmd() -> None:
+    """Update all registry indexes.
+
+    Refreshes the cached skill lists from all configured registries.
+
+    Example:
+
+    \b
+        skillforge registry update
+    """
+    from skillforge.registry import update_registries, list_registries
+
+    registries = list_registries()
+    if not registries:
+        console.print("[yellow]No registries configured[/yellow]")
+        return
+
+    console.print("[dim]Updating registry indexes...[/dim]")
+    console.print()
+
+    updated = update_registries()
+
+    for reg in updated:
+        console.print(f"[green]✓[/green] {reg.name}: {len(reg.skills)} skills")
+
+    console.print()
+    console.print(f"[dim]Updated {len(updated)} registry(ies)[/dim]")
+
+
+@app.command()
+def search(
+    query: str = typer.Argument(..., help="Search query"),
+    registry_name: Optional[str] = typer.Option(
+        None,
+        "--registry",
+        "-r",
+        help="Search only in this registry",
+    ),
+) -> None:
+    """Search for skills in registries.
+
+    Searches skill names, descriptions, and tags across all configured
+    registries.
+
+    Example:
+
+    \b
+        skillforge search "code review"
+        skillforge search python --registry community-skills
+    """
+    from skillforge.registry import search_skills, list_registries
+
+    registries = list_registries()
+    if not registries:
+        console.print("[yellow]No registries configured[/yellow]")
+        console.print()
+        console.print("[dim]Add a registry first:[/dim]")
+        console.print("  skillforge registry add https://github.com/user/skills-registry")
+        return
+
+    results = search_skills(query, registry_name)
+
+    if not results:
+        console.print(f"[yellow]No skills found matching:[/yellow] \"{query}\"")
+        console.print()
+        console.print("[dim]Try a different search term or add more registries[/dim]")
+        return
+
+    console.print()
+    table = Table(
+        title=f'Search Results: "{query}"',
+        show_header=True,
+        header_style="bold",
+    )
+    table.add_column("Skill", style="cyan")
+    table.add_column("Version")
+    table.add_column("Registry", style="dim")
+    table.add_column("Description")
+
+    for skill in results[:20]:  # Limit to 20 results
+        desc = skill.description[:40] + "..." if len(skill.description) > 40 else skill.description
+        table.add_row(skill.name, skill.version, skill.registry, desc)
+
+    console.print(table)
+
+    if len(results) > 20:
+        console.print(f"[dim]...and {len(results) - 20} more results[/dim]")
+
+    console.print()
+    console.print(f"[dim]Found {len(results)} skill(s) matching \"{query}\"[/dim]")
+    console.print("[dim]Pull with: skillforge pull <skill-name>[/dim]")
+
+
+@app.command()
+def pull(
+    skill_name: str = typer.Argument(..., help="Name of the skill to download"),
+    output: Path = typer.Option(
+        Path("./skills"),
+        "--output",
+        "-o",
+        help="Output directory",
+    ),
+    registry_name: Optional[str] = typer.Option(
+        None,
+        "--registry",
+        "-r",
+        help="Pull from specific registry",
+    ),
+) -> None:
+    """Download a skill from a registry.
+
+    Downloads the skill to the specified output directory (default: ./skills/).
+
+    Example:
+
+    \b
+        skillforge pull code-reviewer
+        skillforge pull my-skill --output ./my-skills
+        skillforge pull company-skill --registry company
+    """
+    from skillforge.registry import pull_skill, get_skill_info, RegistryError, SkillNotFoundError
+
+    # Get skill info first
+    skill = get_skill_info(skill_name, registry_name)
+    if not skill:
+        console.print(f"[red]Error:[/red] Skill '{skill_name}' not found")
+        console.print()
+        console.print("[dim]Search for available skills:[/dim]")
+        console.print(f"  skillforge search {skill_name}")
+        raise typer.Exit(code=1)
+
+    console.print(f"[dim]Downloading {skill_name} from {skill.registry}...[/dim]")
+
+    try:
+        skill_dir = pull_skill(skill_name, output, registry_name)
+
+        console.print()
+        console.print(f"[green]✓ Downloaded:[/green] {skill_name} v{skill.version}")
+        console.print(f"  Location: {skill_dir}")
+        console.print()
+        console.print("[dim]Next steps:[/dim]")
+        console.print(f"  Validate: skillforge validate {skill_dir}")
+        console.print(f"  Install:  skillforge install {skill_dir}")
+
+    except SkillNotFoundError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=1)
+
+    except RegistryError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=1)
+
+
 if __name__ == "__main__":
     app()

@@ -1,6 +1,6 @@
 """SkillForge - Create, validate, and bundle Anthropic Agent Skills."""
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 from skillforge.skill import (
     Skill,
@@ -49,6 +49,21 @@ from skillforge.ai import (
     get_available_providers,
     GenerationResult,
     AnalysisResult,
+)
+from skillforge.registry import (
+    add_registry,
+    remove_registry,
+    list_registries,
+    update_registries,
+    search_skills,
+    pull_skill,
+    get_skill_info,
+    Registry,
+    SkillEntry,
+    RegistryError,
+    RegistryNotFoundError,
+    SkillNotFoundError,
+    REGISTRIES_CONFIG,
 )
 from skillforge.tester import (
     TestCase,
@@ -115,6 +130,20 @@ __all__ = [
     "get_available_providers",
     "GenerationResult",
     "AnalysisResult",
+    # Registry
+    "add_registry",
+    "remove_registry",
+    "list_registries",
+    "update_registries",
+    "search_skills",
+    "pull_skill",
+    "get_skill_info",
+    "Registry",
+    "SkillEntry",
+    "RegistryError",
+    "RegistryNotFoundError",
+    "SkillNotFoundError",
+    "REGISTRIES_CONFIG",
     # Testing
     "TestCase",
     "TestResult",

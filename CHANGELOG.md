@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2025-01-22
+
+### Added
+
+- **Skill Registry** - Discover and download skills from GitHub-based registries
+  - `skillforge registry add <github-url>` - Add a skill registry
+  - `skillforge registry list` - List configured registries
+  - `skillforge registry remove <name>` - Remove a registry
+  - `skillforge registry update` - Refresh all registry indexes
+  - `skillforge search <query>` - Search for skills across registries
+  - `skillforge pull <skill-name>` - Download a skill from a registry
+
+- **Programmatic Registry API**
+  - `add_registry()`, `remove_registry()`, `list_registries()`, `update_registries()` functions
+  - `search_skills()`, `pull_skill()`, `get_skill_info()` functions
+  - `Registry`, `SkillEntry` dataclasses
+  - Config stored at `~/.config/skillforge/registries.json`
+
 ## [0.6.0] - 2025-01-21
 
 ### Added
