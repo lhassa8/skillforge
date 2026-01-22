@@ -155,13 +155,16 @@ skillforge improve ./skills/security-reviewer "Add examples for Django and FastA
 # 6. Validate against Anthropic requirements
 skillforge validate ./skills/security-reviewer
 
-# 7. Bundle for upload
+# 7. Bundle for upload (for claude.ai)
 skillforge bundle ./skills/security-reviewer
 
-# Output: skills/security-reviewer_20240115_143022.zip
+# OR: Install directly to Claude Code
+skillforge install ./skills/security-reviewer
 ```
 
-**Deploy:** Upload the `.zip` file to Claude at **Settings → Features → Upload Skill**
+**Deploy options:**
+- **Claude Code:** `skillforge install ./skills/my-skill` (skill is immediately available)
+- **claude.ai:** Upload the `.zip` file at **Settings → Features → Upload Skill**
 
 ---
 
@@ -378,6 +381,69 @@ skillforge test ./skills/my-skill -v
 | `--estimate-cost` | Show cost estimate without running tests |
 | `--stop, -s` | Stop at first failure |
 | `--timeout` | Timeout per test in seconds (default: 30) |
+
+---
+
+### Claude Code Commands
+
+Install and manage skills directly in Claude Code.
+
+#### `skillforge install`
+
+Install a skill to Claude Code's skills directory.
+
+```bash
+# Install to user directory (~/.claude/skills/) - available in all projects
+skillforge install ./skills/code-reviewer
+
+# Install to project directory (./.claude/skills/) - project-specific
+skillforge install ./skills/project-helper --project
+
+# Overwrite existing installation
+skillforge install ./skills/code-reviewer --force
+```
+
+#### `skillforge uninstall`
+
+Remove a skill from Claude Code.
+
+```bash
+skillforge uninstall code-reviewer
+skillforge uninstall project-helper --project
+```
+
+#### `skillforge sync`
+
+Install all skills from a directory.
+
+```bash
+# Sync all skills to user directory
+skillforge sync ./skills
+
+# Sync to project directory
+skillforge sync ./skills --project
+
+# Force overwrite existing
+skillforge sync ./skills --force
+```
+
+#### `skillforge installed`
+
+List installed Claude Code skills.
+
+```bash
+# List all installed skills
+skillforge installed
+
+# Show only user-level skills
+skillforge installed --user
+
+# Show only project-level skills
+skillforge installed --project
+
+# Show installation paths
+skillforge installed --paths
+```
 
 ---
 

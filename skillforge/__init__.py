@@ -1,6 +1,6 @@
 """SkillForge - Create, validate, and bundle Anthropic Agent Skills."""
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 from skillforge.skill import (
     Skill,
@@ -30,6 +30,17 @@ from skillforge.templates import (
     list_templates,
     get_templates_by_category,
     get_template_names,
+)
+from skillforge.claude_code import (
+    install_skill,
+    uninstall_skill,
+    list_installed_skills,
+    sync_skills,
+    is_skill_installed,
+    InstallResult,
+    InstalledSkill,
+    USER_SKILLS_DIR,
+    PROJECT_SKILLS_DIR,
 )
 from skillforge.ai import (
     generate_skill,
@@ -85,6 +96,16 @@ __all__ = [
     "list_templates",
     "get_templates_by_category",
     "get_template_names",
+    # Claude Code Integration
+    "install_skill",
+    "uninstall_skill",
+    "list_installed_skills",
+    "sync_skills",
+    "is_skill_installed",
+    "InstallResult",
+    "InstalledSkill",
+    "USER_SKILLS_DIR",
+    "PROJECT_SKILLS_DIR",
     # AI Generation
     "generate_skill",
     "improve_skill",

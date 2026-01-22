@@ -1236,6 +1236,248 @@ def templates_show(
 
 
 # =============================================================================
+# Claude Code Integration Commands
+# =============================================================================
+
+
+@app.command("install")
+def install_to_claude(
+    skill_path: Path = typer.Argument(..., help="Path to the skill directory"),
+    project: bool = typer.Option(
+        False,
+        "--project",
+        "-p",
+        help="Install to project (./.claude/skills/) instead of user (~/.claude/skills/)",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help="Overwrite if already installed",
+    ),
+) -> None:
+    """Install a skill to Claude Code.
+
+    Copies the skill to Claude Code's skills directory so it's automatically
+    available when using Claude Code.
+
+    By default, installs to ~/.claude/skills/ (user-level, all projects).
+    Use --project to install to ./.claude/skills/ (project-level only).
+
+    Example:
+
+    \b
+        skillforge install ./skills/code-reviewer
+        skillforge install ./skills/project-helper --project
+        skillforge install ./skills/my-skill --force
+    """
+    from skillforge.claude_code import install_skill, get_skills_dir
+
+    skill_path = Path(skill_path).resolve()
+    scope = "project" if project else "user"
+
+    console.print(f"[dim]Installing to: {get_skills_dir(scope)}[/dim]")
+
+    try:
+        result = install_skill(skill_path, scope=scope, force=force)
+
+        console.print()
+        if result.was_update:
+            console.print(f"[green]✓ Updated:[/green] {result.skill_name}")
+        else:
+            console.print(f"[green]✓ Installed:[/green] {result.skill_name}")
+        console.print(f"  [dim]Location: {result.installed_path}[/dim]")
+        console.print()
+        console.print("[dim]Skill is now available in Claude Code.[/dim]")
+
+    except FileNotFoundError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=1)
+
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=1)
+
+    except FileExistsError as e:
+        console.print(f"[yellow]Warning:[/yellow] {e}")
+        raise typer.Exit(code=1)
+
+
+@app.command("uninstall")
+def uninstall_from_claude(
+    skill_name: str = typer.Argument(..., help="Name of the skill to uninstall"),
+    project: bool = typer.Option(
+        False,
+        "--project",
+        "-p",
+        help="Uninstall from project (./.claude/skills/)",
+    ),
+) -> None:
+    """Uninstall a skill from Claude Code.
+
+    Removes the skill from Claude Code's skills directory.
+
+    Example:
+
+    \b
+        skillforge uninstall code-reviewer
+        skillforge uninstall project-helper --project
+    """
+    from skillforge.claude_code import uninstall_skill
+
+    scope = "project" if project else "user"
+
+    removed_path = uninstall_skill(skill_name, scope=scope)
+
+    if removed_path:
+        console.print(f"[green]✓ Uninstalled:[/green] {skill_name}")
+        console.print(f"  [dim]Removed from: {removed_path}[/dim]")
+    else:
+        console.print(f"[yellow]Not found:[/yellow] {skill_name}")
+        console.print(f"[dim]Skill not installed in {scope} scope[/dim]")
+        raise typer.Exit(code=1)
+
+
+@app.command("sync")
+def sync_to_claude(
+    source_dir: Path = typer.Argument(
+        Path("./skills"),
+        help="Directory containing skills to sync",
+    ),
+    project: bool = typer.Option(
+        False,
+        "--project",
+        "-p",
+        help="Install to project (./.claude/skills/)",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help="Overwrite existing installations",
+    ),
+) -> None:
+    """Sync all skills from a directory to Claude Code.
+
+    Finds all valid skills in the source directory and installs them
+    to Claude Code's skills directory.
+
+    Example:
+
+    \b
+        skillforge sync ./skills
+        skillforge sync ./my-skills --project
+        skillforge sync ./skills --force
+    """
+    from skillforge.claude_code import sync_skills, get_skills_dir
+
+    source_dir = Path(source_dir).resolve()
+    scope = "project" if project else "user"
+
+    console.print(f"[dim]Syncing skills to: {get_skills_dir(scope)}[/dim]")
+    console.print()
+
+    try:
+        installed, errors = sync_skills(source_dir, scope=scope, force=force)
+
+        for result in installed:
+            if result.was_update:
+                console.print(f"[green]✓ Updated:[/green] {result.skill_name}")
+            else:
+                console.print(f"[green]✓ Installed:[/green] {result.skill_name}")
+
+        for name, error in errors:
+            console.print(f"[yellow]⚠ Skipped:[/yellow] {name} ({error})")
+
+        console.print()
+        if installed:
+            console.print(f"[bold]Installed {len(installed)} skill(s)[/bold]")
+        if errors:
+            console.print(f"[dim]Skipped {len(errors)} skill(s)[/dim]")
+
+        if not installed and not errors:
+            console.print("[yellow]No skills found in source directory[/yellow]")
+
+    except FileNotFoundError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=1)
+
+
+@app.command("installed")
+def list_installed(
+    project: bool = typer.Option(
+        False,
+        "--project",
+        "-p",
+        help="Show only project-level skills",
+    ),
+    user: bool = typer.Option(
+        False,
+        "--user",
+        "-u",
+        help="Show only user-level skills",
+    ),
+    paths: bool = typer.Option(
+        False,
+        "--paths",
+        help="Show full installation paths",
+    ),
+) -> None:
+    """List skills installed in Claude Code.
+
+    Shows all skills that have been installed to Claude Code's
+    skills directories.
+
+    Example:
+
+    \b
+        skillforge installed
+        skillforge installed --project
+        skillforge installed --paths
+    """
+    from skillforge.claude_code import list_installed_skills, USER_SKILLS_DIR, PROJECT_SKILLS_DIR
+
+    # Determine scope filter
+    scope = None
+    if project and not user:
+        scope = "project"
+    elif user and not project:
+        scope = "user"
+
+    skills = list_installed_skills(scope=scope)
+
+    if not skills:
+        console.print("[yellow]No skills installed[/yellow]")
+        console.print()
+        console.print("[dim]Install a skill with:[/dim]")
+        console.print("  skillforge install ./skills/my-skill")
+        return
+
+    console.print()
+    table = Table(title="Installed Skills", show_header=True, header_style="bold")
+    table.add_column("Name", style="cyan")
+    table.add_column("Scope")
+    if paths:
+        table.add_column("Path", style="dim")
+    else:
+        table.add_column("Description")
+
+    for skill in skills:
+        scope_display = "[blue]user[/blue]" if skill.scope == "user" else "[green]project[/green]"
+        if paths:
+            table.add_row(skill.name, scope_display, str(skill.path))
+        else:
+            desc = skill.description[:40] + "..." if len(skill.description) > 40 else skill.description
+            table.add_row(skill.name, scope_display, desc)
+
+    console.print(table)
+
+    console.print()
+    console.print(f"[dim]User skills: {USER_SKILLS_DIR}[/dim]")
+    console.print(f"[dim]Project skills: {PROJECT_SKILLS_DIR.resolve()}[/dim]")
+
+
+# =============================================================================
 # AI Commands
 # =============================================================================
 

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2025-01-21
+
+### Added
+
+- **Claude Code Integration** - Install skills directly to Claude Code
+  - `skillforge install ./skills/my-skill` - Install to user (~/.claude/skills/)
+  - `skillforge install ./skills/my-skill --project` - Install to project (./.claude/skills/)
+  - `skillforge uninstall my-skill` - Remove installed skill
+  - `skillforge sync ./skills` - Install all skills from a directory
+  - `skillforge installed` - List all installed skills
+
+- **Programmatic Claude Code API**
+  - `install_skill()`, `uninstall_skill()`, `list_installed_skills()` functions
+  - `sync_skills()` for batch installation
+  - `is_skill_installed()` to check installation status
+  - `InstallResult`, `InstalledSkill` dataclasses
+
 ## [0.4.0] - 2025-01-21
 
 ### Added
