@@ -102,22 +102,69 @@ ruff format --check skillforge/
 
 ```
 skillforge/
-├── skillforge/           # Main package
-│   ├── __init__.py      # Package exports
-│   ├── cli.py           # CLI entry point (Typer)
-│   ├── skill.py         # Skill model and parsing
-│   ├── validator.py     # Validation logic
-│   ├── bundler.py       # Zip bundling/extraction
-│   ├── scaffold.py      # Skill scaffolding
-│   └── ai.py            # AI-powered generation
-├── tests/               # Test suite
-│   ├── test_skill.py    # Skill model tests
-│   ├── test_validator.py # Validation tests
-│   ├── test_bundler.py  # Bundling tests
-│   ├── test_scaffold.py # Scaffold tests
-│   ├── test_cli.py      # CLI integration tests
-│   └── test_ai.py       # AI generation tests
-└── skills/              # Generated skills directory
+├── skillforge/              # Main package
+│   ├── __init__.py         # Package exports
+│   ├── api.py              # Stable public API (v1.0.0)
+│   ├── cli.py              # CLI entry point (Typer)
+│   ├── skill.py            # Skill model and parsing
+│   ├── validator.py        # Validation logic
+│   ├── bundler.py          # Zip bundling/extraction
+│   ├── scaffold.py         # Skill scaffolding
+│   ├── composer.py         # Skill composition
+│   ├── templates.py        # Built-in skill templates
+│   ├── ai.py               # AI-powered generation
+│   ├── tester.py           # Skill testing framework
+│   ├── registry.py         # Skill registry management
+│   ├── claude_code.py      # Claude Code integration
+│   ├── versioning.py       # Semantic versioning
+│   ├── lockfile.py         # Lock file management
+│   ├── config.py           # Enterprise configuration
+│   ├── migrate.py          # Migration tools
+│   ├── mcp/                # MCP integration
+│   │   ├── __init__.py
+│   │   ├── mapping.py      # Skill <-> MCP tool conversion
+│   │   ├── server.py       # MCP server generation
+│   │   └── client.py       # MCP client/discovery
+│   ├── security/           # Security scanning
+│   │   ├── __init__.py
+│   │   ├── scanner.py      # Security scanner
+│   │   └── patterns.py     # Security patterns
+│   ├── governance/         # Enterprise governance
+│   │   ├── __init__.py
+│   │   ├── trust.py        # Trust tiers
+│   │   ├── policy.py       # Governance policies
+│   │   └── audit.py        # Audit logging
+│   ├── platforms/          # Multi-platform publishing
+│   │   ├── __init__.py
+│   │   ├── base.py         # Platform adapter base
+│   │   ├── claude.py       # Claude adapter
+│   │   ├── openai.py       # OpenAI adapter
+│   │   └── langchain.py    # LangChain adapter
+│   └── analytics/          # Usage analytics
+│       ├── __init__.py
+│       ├── tracker.py      # Usage tracking
+│       └── reports.py      # ROI and reports
+├── tests/                   # Test suite (700+ tests)
+│   ├── test_skill.py
+│   ├── test_validator.py
+│   ├── test_bundler.py
+│   ├── test_scaffold.py
+│   ├── test_cli.py
+│   ├── test_ai.py
+│   ├── test_tester.py
+│   ├── test_composer.py
+│   ├── test_registry.py
+│   ├── test_claude_code.py
+│   ├── test_versioning.py
+│   ├── test_lockfile.py
+│   ├── test_mcp.py
+│   ├── test_security.py
+│   ├── test_governance.py
+│   ├── test_platforms.py
+│   ├── test_analytics.py
+│   ├── test_config.py
+│   └── test_migrate.py
+└── skills/                  # Example/generated skills
 ```
 
 ## Testing Guidelines
@@ -152,11 +199,21 @@ class TestFeatureName:
 
 ## Release Process
 
-1. Update version in `pyproject.toml`
-2. Update CHANGELOG.md
-3. Create a git tag: `git tag v0.x.0`
-4. Push tag: `git push origin v0.x.0`
-5. CI will build and publish to PyPI
+1. Update version in `pyproject.toml` and `skillforge/__init__.py`
+2. Update CHANGELOG.md with release notes
+3. Run full test suite: `pytest tests/ -v`
+4. Commit changes: `git commit -m "vX.Y.Z: Release description"`
+5. Create a git tag: `git tag vX.Y.Z`
+6. Push commit and tag: `git push && git push origin vX.Y.Z`
+7. Create GitHub release: `gh release create vX.Y.Z`
+8. CI will build and publish to PyPI
+
+### API Stability (v1.0.0+)
+
+- All exports from `skillforge.api` are stable
+- Breaking changes only in major versions
+- Deprecated features get at least one minor version warning
+- Use `@deprecated()` decorator for deprecations
 
 ## Questions?
 

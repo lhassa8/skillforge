@@ -5,18 +5,22 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Tests](https://github.com/lhassa8/skillforge/actions/workflows/tests.yml/badge.svg)](https://github.com/lhassa8/skillforge/actions/workflows/tests.yml)
 
-**SkillForge** is the developer toolkit for [Anthropic Agent Skills](https://docs.anthropic.com/en/docs/agents-and-tools/agent-skills) — custom instruction sets that extend Claude's capabilities for specific tasks.
+**SkillForge** is the enterprise-grade platform for [Anthropic Agent Skills](https://docs.anthropic.com/en/docs/agents-and-tools/agent-skills) — custom instruction sets that extend Claude's capabilities for specific tasks.
 
-**Generate production-ready skills in seconds using AI, or craft them manually with validation and bundling tools.**
+**Create, validate, test, secure, version, and deploy skills across multiple AI platforms.**
 
 ```bash
 # Generate a complete skill from a natural language description
 skillforge generate "Review Python code for security vulnerabilities and best practices"
 
-# Validate, improve, and bundle for deployment
+# Validate, test, and scan for security issues
 skillforge validate ./skills/code-reviewer
-skillforge improve ./skills/code-reviewer "Add examples for async code patterns"
-skillforge bundle ./skills/code-reviewer
+skillforge test ./skills/code-reviewer
+skillforge security scan ./skills/code-reviewer
+
+# Deploy to Claude, OpenAI, or LangChain
+skillforge publish ./skills/code-reviewer --platform claude
+skillforge publish ./skills/code-reviewer --platform openai --mode gpt
 ```
 
 ---
@@ -32,7 +36,23 @@ Agent Skills are custom instructions that teach Claude how to handle specific ta
 - Data analysis workflows
 - Domain-specific assistants
 
-SkillForge handles the entire skill development lifecycle: **generate → validate → test → improve → bundle → deploy**.
+SkillForge handles the entire skill development lifecycle: **generate → validate → test → secure → version → deploy**.
+
+---
+
+## Feature Highlights
+
+| Feature | Description |
+|---------|-------------|
+| **AI Generation** | Generate production-ready skills from natural language descriptions |
+| **Testing Framework** | Mock and live testing with assertions, regression baselines |
+| **Versioning** | Semantic versioning, lock files, version constraints |
+| **MCP Integration** | Expose skills as MCP tools, import tools from MCP servers |
+| **Security Scanning** | Detect prompt injection, credential exposure, data exfiltration |
+| **Governance** | Trust tiers, policies, audit trails for enterprise compliance |
+| **Multi-Platform** | Deploy to Claude, OpenAI (Custom GPTs), LangChain Hub |
+| **Analytics** | Usage tracking, cost analysis, ROI calculation |
+| **Enterprise Config** | SSO, cloud storage, proxy support |
 
 ---
 
@@ -447,6 +467,485 @@ skillforge installed --paths
 
 ---
 
+### Versioning Commands
+
+Manage skill versions with semantic versioning support.
+
+#### `skillforge version show`
+
+Display the current version of a skill.
+
+```bash
+skillforge version show ./skills/my-skill
+```
+
+#### `skillforge version bump`
+
+Increment the skill version.
+
+```bash
+# Bump patch version (1.0.0 -> 1.0.1)
+skillforge version bump ./skills/my-skill
+
+# Bump minor version (1.0.0 -> 1.1.0)
+skillforge version bump ./skills/my-skill --minor
+
+# Bump major version (1.0.0 -> 2.0.0)
+skillforge version bump ./skills/my-skill --major
+
+# Set a specific version
+skillforge version bump ./skills/my-skill --set 2.0.0
+```
+
+#### `skillforge version list`
+
+List available versions from registries.
+
+```bash
+skillforge version list code-reviewer
+```
+
+#### `skillforge lock`
+
+Generate or verify lock files for reproducible installations.
+
+```bash
+# Generate lock file (skillforge.lock)
+skillforge lock ./skills
+
+# Verify installed skills match lock file
+skillforge lock --check
+
+# Install from lock file
+skillforge pull code-reviewer --locked
+```
+
+**Lock file format (`skillforge.lock`):**
+```yaml
+version: "1"
+skills:
+  code-reviewer:
+    version: "1.2.0"
+    source: "https://github.com/skillforge/community-skills"
+    checksum: "sha256:abc123..."
+```
+
+---
+
+### MCP Commands
+
+Integrate with the Model Context Protocol ecosystem.
+
+#### `skillforge mcp init`
+
+Create a new MCP server project.
+
+```bash
+skillforge mcp init ./my-mcp-server
+skillforge mcp init ./my-server --name "My Tools" --description "Custom tools"
+```
+
+#### `skillforge mcp add`
+
+Add a skill to an MCP server.
+
+```bash
+skillforge mcp add ./my-server ./skills/code-reviewer
+```
+
+#### `skillforge mcp remove`
+
+Remove a tool from an MCP server.
+
+```bash
+skillforge mcp remove ./my-server code-reviewer
+```
+
+#### `skillforge mcp list`
+
+List tools in an MCP server.
+
+```bash
+skillforge mcp list ./my-server
+```
+
+#### `skillforge mcp serve`
+
+Run an MCP server (stdio transport for Claude Desktop).
+
+```bash
+skillforge mcp serve ./my-server
+```
+
+#### `skillforge mcp config`
+
+Show Claude Desktop configuration snippet.
+
+```bash
+skillforge mcp config ./my-server
+```
+
+#### `skillforge mcp discover`
+
+Discover tools from configured MCP servers.
+
+```bash
+# Auto-detect Claude Desktop config
+skillforge mcp discover
+
+# Use custom config file
+skillforge mcp discover --config ./mcp-config.json
+```
+
+#### `skillforge mcp import`
+
+Import an MCP tool as a SkillForge skill.
+
+```bash
+skillforge mcp import my-tool-name
+skillforge mcp import my-tool --output ./skills
+```
+
+---
+
+### Security Commands
+
+Scan skills for security vulnerabilities.
+
+#### `skillforge security scan`
+
+Scan a skill for security issues.
+
+```bash
+# Basic scan
+skillforge security scan ./skills/my-skill
+
+# Filter by minimum severity
+skillforge security scan ./skills/my-skill --min-severity medium
+
+# JSON output for CI/CD
+skillforge security scan ./skills/my-skill --format json
+
+# Fail if issues found (for CI)
+skillforge security scan ./skills/my-skill --fail-on-issues
+```
+
+**Detects:**
+- Prompt injection attempts
+- Jailbreak patterns
+- Credential exposure (API keys, passwords, private keys)
+- Data exfiltration patterns
+- Unsafe URLs and code execution risks
+
+#### `skillforge security patterns`
+
+List available security patterns.
+
+```bash
+# List all patterns
+skillforge security patterns
+
+# Filter by severity
+skillforge security patterns --severity critical
+
+# Filter by type
+skillforge security patterns --type prompt_injection
+```
+
+---
+
+### Governance Commands
+
+Enterprise governance for skill management.
+
+#### `skillforge governance trust`
+
+View or set skill trust tier.
+
+```bash
+# View trust status
+skillforge governance trust ./skills/my-skill
+
+# Set trust tier
+skillforge governance trust ./skills/my-skill --set verified
+skillforge governance trust ./skills/my-skill --set enterprise
+```
+
+**Trust tiers:** `untrusted`, `community`, `verified`, `enterprise`
+
+#### `skillforge governance policy`
+
+Manage governance policies.
+
+```bash
+# List all policies
+skillforge governance policy list
+
+# Show policy details
+skillforge governance policy show production
+
+# Create custom policy
+skillforge governance policy create my-policy
+
+# Check skill against policy
+skillforge governance check ./skills/my-skill --policy production
+```
+
+**Built-in policies:**
+| Policy | Min Trust | Max Risk | Approval |
+|--------|-----------|----------|----------|
+| `development` | untrusted | 100 | No |
+| `staging` | community | 70 | No |
+| `production` | verified | 30 | Yes |
+| `enterprise` | enterprise | 10 | Yes |
+
+#### `skillforge governance audit`
+
+View audit trail of skill events.
+
+```bash
+# View recent events
+skillforge governance audit
+
+# Filter by skill
+skillforge governance audit --skill my-skill
+
+# Filter by date
+skillforge governance audit --from 2026-01-01 --to 2026-01-31
+
+# Filter by event type
+skillforge governance audit --type security_scan
+
+# Summary view
+skillforge governance audit --summary
+```
+
+#### `skillforge governance approve`
+
+Formally approve a skill for deployment.
+
+```bash
+skillforge governance approve ./skills/my-skill --tier enterprise
+skillforge governance approve ./skills/my-skill --tier verified --notes "Reviewed by security team"
+```
+
+---
+
+### Publishing Commands
+
+Deploy skills to multiple AI platforms.
+
+#### `skillforge publish`
+
+Publish a skill to an AI platform.
+
+```bash
+# Publish to Claude (Claude Code installation)
+skillforge publish ./skills/my-skill --platform claude
+
+# Publish to Claude API
+skillforge publish ./skills/my-skill --platform claude --mode api
+
+# Publish as OpenAI Custom GPT
+skillforge publish ./skills/my-skill --platform openai --mode gpt
+
+# Publish to OpenAI Assistants API
+skillforge publish ./skills/my-skill --platform openai --mode assistant
+
+# Publish to LangChain Hub
+skillforge publish ./skills/my-skill --platform langchain --mode hub
+
+# Export as LangChain Python module
+skillforge publish ./skills/my-skill --platform langchain --mode module
+
+# Dry run (validate without publishing)
+skillforge publish ./skills/my-skill --platform claude --dry-run
+
+# Publish to all platforms
+skillforge publish ./skills/my-skill --all
+```
+
+#### `skillforge platforms`
+
+List available platforms and their capabilities.
+
+```bash
+skillforge platforms
+```
+
+---
+
+### Analytics Commands
+
+Track skill usage and calculate ROI.
+
+#### `skillforge analytics show`
+
+View skill usage metrics.
+
+```bash
+skillforge analytics show my-skill
+skillforge analytics show my-skill --period 30d
+```
+
+#### `skillforge analytics roi`
+
+Calculate return on investment.
+
+```bash
+skillforge analytics roi my-skill
+skillforge analytics roi my-skill --hourly-rate 75 --time-saved 5
+```
+
+#### `skillforge analytics report`
+
+Generate comprehensive usage report.
+
+```bash
+skillforge analytics report
+skillforge analytics report --period 30d --format json
+```
+
+#### `skillforge analytics cost`
+
+View cost breakdown by model.
+
+```bash
+skillforge analytics cost my-skill
+skillforge analytics cost my-skill --period 7d
+```
+
+#### `skillforge analytics estimate`
+
+Project future costs.
+
+```bash
+skillforge analytics estimate my-skill --daily 10
+skillforge analytics estimate my-skill --monthly 500
+```
+
+---
+
+### Configuration Commands
+
+Manage SkillForge configuration.
+
+#### `skillforge config show`
+
+Display current configuration.
+
+```bash
+skillforge config show
+skillforge config show --section auth
+```
+
+#### `skillforge config set`
+
+Set a configuration value.
+
+```bash
+skillforge config set default_model gpt-4o
+skillforge config set log_level debug
+skillforge config set proxy.http_proxy http://proxy:8080
+```
+
+#### `skillforge config path`
+
+Show configuration file locations.
+
+```bash
+skillforge config path
+```
+
+#### `skillforge config init`
+
+Create a configuration file.
+
+```bash
+# Create user config (~/.config/skillforge/config.yml)
+skillforge config init
+
+# Create project config (./.skillforge.yml)
+skillforge config init --project
+```
+
+**Environment variable overrides:**
+
+All config values can be overridden with `SKILLFORGE_` prefix:
+
+```bash
+export SKILLFORGE_DEFAULT_MODEL=gpt-4o
+export SKILLFORGE_LOG_LEVEL=debug
+export SKILLFORGE_COLOR_OUTPUT=false
+```
+
+---
+
+### Migration Commands
+
+Upgrade skills from older formats.
+
+#### `skillforge migrate check`
+
+List skills needing migration.
+
+```bash
+skillforge migrate check ./skills
+skillforge migrate check ./skills --recursive
+```
+
+#### `skillforge migrate run`
+
+Migrate a skill to v1.0 format.
+
+```bash
+# Migrate single skill (creates backup automatically)
+skillforge migrate run ./skills/my-skill
+
+# Migrate without backup
+skillforge migrate run ./skills/my-skill --no-backup
+
+# Migrate entire directory
+skillforge migrate run ./skills --recursive
+```
+
+#### `skillforge migrate preview`
+
+Preview migration changes without applying.
+
+```bash
+skillforge migrate preview ./skills/my-skill
+```
+
+**Skill format versions:**
+| Version | Characteristics |
+|---------|-----------------|
+| v0.1 | No version field, basic frontmatter |
+| v0.9 | Has version field, no schema_version |
+| v1.0 | Has schema_version, min_skillforge_version |
+
+---
+
+### Utility Commands
+
+#### `skillforge doctor`
+
+Check installation health and environment.
+
+```bash
+skillforge doctor
+```
+
+#### `skillforge info`
+
+Show detailed SkillForge information.
+
+```bash
+skillforge info
+```
+
+---
+
 ## Skill Testing
 
 Test your skills before deployment to catch issues early.
@@ -542,6 +1041,32 @@ skillforge test ./skills/my-skill --mode live --estimate-cost
 
 # Run live tests
 skillforge test ./skills/my-skill --mode live
+```
+
+### Regression Testing
+
+Compare responses against recorded baselines to catch unintended changes.
+
+```bash
+# Record baseline responses
+skillforge test ./skills/my-skill --record-baselines
+
+# Run regression tests (compare against baselines)
+skillforge test ./skills/my-skill --regression
+
+# Adjust similarity threshold (default: 80%)
+skillforge test ./skills/my-skill --regression --threshold 0.9
+```
+
+**Regression assertion type:**
+```yaml
+tests:
+  - name: "consistent_output"
+    input: "Review this code"
+    assertions:
+      - type: similar_to
+        baseline: "baseline_response_name"
+        threshold: 0.8
 ```
 
 ### CI/CD Integration
@@ -688,47 +1213,163 @@ def get_user(id: int):
 
 ## Programmatic Usage
 
-Use SkillForge as a Python library:
+Use SkillForge as a Python library. For API stability, import from `skillforge.api`:
+
+```python
+from pathlib import Path
+from skillforge.api import (
+    # Core
+    Skill,
+    validate_skill,
+    bundle_skill,
+
+    # Testing
+    run_tests,
+    TestResult,
+
+    # Security
+    scan_skill,
+    ScanResult,
+    Severity,
+
+    # Governance
+    TrustTier,
+    check_policy,
+
+    # Platforms
+    publish_skill,
+    Platform,
+
+    # Analytics
+    record_success,
+    get_skill_metrics,
+
+    # Versioning
+    SkillVersion,
+    parse_version,
+    bump_version,
+
+    # MCP
+    skill_to_mcp_tool,
+    create_mcp_server,
+
+    # Config
+    get_config,
+    SkillForgeConfig,
+)
+```
+
+### Basic Usage
 
 ```python
 from pathlib import Path
 from skillforge import (
     generate_skill,
-    improve_skill,
     validate_skill_directory,
     bundle_skill,
-    GenerationResult,
-    ValidationResult,
-    BundleResult,
 )
 
-# Generate a skill (returns GenerationResult)
-result: GenerationResult = generate_skill(
+# Generate a skill
+result = generate_skill(
     description="Help users write SQL queries",
-    name="sql-helper",          # Optional: overrides AI-generated name
-    context_dir=Path("./src"),  # Optional: analyze project for context
-    provider="anthropic",       # Optional: anthropic, openai, ollama
+    name="sql-helper",
+    provider="anthropic",
 )
 
 if result.success:
     print(f"Generated: {result.skill.name}")
-    print(result.raw_content)
 
-# Validate a skill directory (requires Path, returns ValidationResult)
+# Validate a skill directory
 skill_path = Path("./skills/sql-helper")
-validation: ValidationResult = validate_skill_directory(skill_path)
+validation = validate_skill_directory(skill_path)
 if validation.valid:
     print("Skill is valid!")
-else:
-    for error in validation.errors:
-        print(f"Error: {error}")
 
-# Bundle for deployment (requires Path, returns BundleResult)
-bundle_result: BundleResult = bundle_skill(skill_path)
+# Bundle for deployment
+bundle_result = bundle_skill(skill_path)
 print(f"Bundle created: {bundle_result.output_path}")
 ```
 
-> **Note:** `validate_skill_directory()` and `bundle_skill()` require `Path` objects, not strings.
+### Security Scanning
+
+```python
+from skillforge.api import scan_skill, Severity
+
+result = scan_skill(Path("./skills/my-skill"))
+
+print(f"Risk score: {result.risk_score}/100")
+print(f"Passed: {result.passed}")
+
+for finding in result.findings:
+    if finding.severity >= Severity.HIGH:
+        print(f"[{finding.severity.name}] {finding.message}")
+```
+
+### Multi-Platform Publishing
+
+```python
+from skillforge.api import publish_skill, Platform
+
+# Publish to Claude
+result = publish_skill(
+    Path("./skills/my-skill"),
+    platform=Platform.CLAUDE,
+    mode="code",
+)
+
+# Publish as OpenAI Custom GPT
+result = publish_skill(
+    Path("./skills/my-skill"),
+    platform=Platform.OPENAI,
+    mode="gpt",
+)
+```
+
+### Analytics
+
+```python
+from skillforge.api import record_success, get_skill_metrics, calculate_roi
+
+# Record a successful invocation
+record_success(
+    skill_name="code-reviewer",
+    latency_ms=1500,
+    input_tokens=100,
+    output_tokens=500,
+    model="claude-sonnet-4-20250514",
+)
+
+# Get metrics
+metrics = get_skill_metrics("code-reviewer")
+print(f"Total invocations: {metrics.total_invocations}")
+print(f"Success rate: {metrics.success_rate:.1%}")
+
+# Calculate ROI
+roi = calculate_roi("code-reviewer", hourly_rate=75, minutes_saved=5)
+print(f"ROI: {roi.roi_percentage:.0f}%")
+```
+
+### MCP Integration
+
+```python
+from skillforge.api import (
+    skill_to_mcp_tool,
+    create_mcp_server,
+    Skill,
+)
+
+# Convert skill to MCP tool
+skill = Skill.from_directory(Path("./skills/code-reviewer"))
+mcp_tool = skill_to_mcp_tool(skill)
+
+# Create MCP server
+server = create_mcp_server(
+    path=Path("./my-mcp-server"),
+    name="My Tools",
+)
+```
+
+> **Note:** Functions that work with files require `Path` objects, not strings.
 
 ---
 
@@ -847,11 +1488,20 @@ MIT License - see [LICENSE](LICENSE) for details.
 ## Resources
 
 - [Anthropic Agent Skills Documentation](https://docs.anthropic.com/en/docs/agents-and-tools/agent-skills)
+- [Model Context Protocol (MCP)](https://modelcontextprotocol.io/)
 - [Changelog](CHANGELOG.md)
 - [Issue Tracker](https://github.com/lhassa8/skillforge/issues)
 
 ---
 
+## Version
+
+Current version: **1.0.0**
+
+SkillForge follows [Semantic Versioning](https://semver.org/). The public API (exported from `skillforge.api`) is stable and will not have breaking changes in minor versions.
+
+---
+
 <p align="center">
-  <strong>Built for developers who want Claude to work the way they do.</strong>
+  <strong>The enterprise platform for AI capability management.</strong>
 </p>
