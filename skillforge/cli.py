@@ -4716,6 +4716,213 @@ def config_init(
 
 
 # =============================================================================
+# Hub Commands (Community Skill Registry)
+# =============================================================================
+
+hub_app = typer.Typer(
+    help="SkillForge Hub - community skill registry",
+    no_args_is_help=True,
+)
+app.add_typer(hub_app, name="hub")
+
+
+@hub_app.command("search")
+def hub_search(
+    query: str = typer.Argument(..., help="Search query"),
+) -> None:
+    """Search for skills in the SkillForge Hub.
+
+    Searches skill names, descriptions, and tags in the community registry.
+
+    Example:
+
+    \b
+        skillforge hub search debug
+        skillforge hub search "code review"
+    """
+    from skillforge.hub import search_skills
+
+    console.print(f"[dim]Searching for '{query}'...[/dim]")
+
+    try:
+        results = search_skills(query)
+
+        if not results:
+            console.print()
+            console.print(f"[yellow]No skills found matching '{query}'[/yellow]")
+            console.print("[dim]Try a different search term or run 'skillforge hub list' to see all skills[/dim]")
+            return
+
+        console.print()
+        table = Table(title=f"Search Results ({len(results)})", show_header=True, header_style="bold")
+        table.add_column("Skill", style="cyan")
+        table.add_column("Description")
+        table.add_column("Author", style="dim")
+        table.add_column("Version", style="dim")
+
+        for skill in results:
+            desc = skill.description[:50] + "..." if len(skill.description) > 50 else skill.description
+            table.add_row(skill.name, desc, skill.author, skill.version)
+
+        console.print(table)
+        console.print()
+        console.print("[dim]Install with: skillforge hub install <skill-name>[/dim]")
+
+    except ConnectionError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=1)
+
+
+@hub_app.command("list")
+def hub_list() -> None:
+    """List all skills in the SkillForge Hub.
+
+    Example:
+
+    \b
+        skillforge hub list
+    """
+    from skillforge.hub import list_skills
+
+    console.print("[dim]Fetching skills from hub...[/dim]")
+
+    try:
+        skills = list_skills()
+
+        if not skills:
+            console.print()
+            console.print("[yellow]No skills found in the hub[/yellow]")
+            return
+
+        console.print()
+        table = Table(title=f"SkillForge Hub ({len(skills)} skills)", show_header=True, header_style="bold")
+        table.add_column("Skill", style="cyan")
+        table.add_column("Description")
+        table.add_column("Author", style="dim")
+        table.add_column("Tags", style="dim")
+
+        for skill in skills:
+            desc = skill.description[:45] + "..." if len(skill.description) > 45 else skill.description
+            tags = ", ".join(skill.tags[:3])
+            if len(skill.tags) > 3:
+                tags += "..."
+            table.add_row(skill.name, desc, skill.author, tags)
+
+        console.print(table)
+        console.print()
+        console.print("[dim]Install with: skillforge hub install <skill-name>[/dim]")
+
+    except ConnectionError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=1)
+
+
+@hub_app.command("info")
+def hub_info(
+    name: str = typer.Argument(..., help="Skill name"),
+) -> None:
+    """Show details about a skill in the hub.
+
+    Example:
+
+    \b
+        skillforge hub info code-reviewer
+    """
+    from skillforge.hub import get_skill
+
+    try:
+        skill = get_skill(name)
+
+        if not skill:
+            console.print(f"[red]Skill not found:[/red] {name}")
+            console.print("[dim]Run 'skillforge hub search' to find skills[/dim]")
+            raise typer.Exit(code=1)
+
+        console.print()
+        console.print(f"[bold cyan]{skill.name}[/bold cyan] v{skill.version}")
+        console.print()
+        console.print(f"[bold]Description:[/bold] {skill.description}")
+        console.print(f"[bold]Author:[/bold] {skill.author}")
+        console.print(f"[bold]Tags:[/bold] {', '.join(skill.tags)}")
+        console.print()
+        console.print("[dim]Install with:[/dim]")
+        console.print(f"  skillforge hub install {skill.name}")
+        console.print(f"  skillforge hub install {skill.name} --project  [dim]# install in current project[/dim]")
+
+    except ConnectionError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=1)
+
+
+@hub_app.command("install")
+def hub_install(
+    name: str = typer.Argument(..., help="Skill name to install"),
+    project: bool = typer.Option(
+        False,
+        "--project",
+        "-p",
+        help="Install to project's .claude/skills/ instead of user's ~/.claude/skills/",
+    ),
+    output: Optional[Path] = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Custom output directory",
+    ),
+) -> None:
+    """Install a skill from the SkillForge Hub.
+
+    By default, installs to ~/.claude/skills/ (user scope).
+    Use --project to install to ./.claude/skills/ (project scope).
+
+    Example:
+
+    \b
+        skillforge hub install code-reviewer
+        skillforge hub install debugger --project
+        skillforge hub install sql-helper -o ./my-skills
+    """
+    from skillforge.hub import install_skill, get_skill
+
+    # First check if skill exists
+    skill = get_skill(name)
+    if not skill:
+        console.print(f"[red]Skill not found:[/red] {name}")
+        console.print("[dim]Run 'skillforge hub search' to find skills[/dim]")
+        raise typer.Exit(code=1)
+
+    console.print(f"[dim]Installing {skill.name} v{skill.version}...[/dim]")
+
+    try:
+        skill_dir = install_skill(name, output_dir=output, project=project)
+
+        console.print()
+        console.print(f"[green]✓ Installed:[/green] {skill.name}")
+        console.print(f"  Location: {skill_dir}")
+        console.print()
+
+        # Show files installed
+        console.print("[bold]Files:[/bold]")
+        for item in sorted(skill_dir.rglob("*")):
+            if item.is_file():
+                rel_path = item.relative_to(skill_dir)
+                console.print(f"  {rel_path}")
+
+        console.print()
+        if not project and not output:
+            console.print("[dim]Skill is now available globally in Claude Code[/dim]")
+        elif project:
+            console.print("[dim]Skill is available in this project's Claude Code sessions[/dim]")
+
+    except ConnectionError as e:
+        console.print(f"[red]Error:[/red] Failed to download skill: {e}")
+        raise typer.Exit(code=1)
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(code=1)
+
+
+# =============================================================================
 # Info Command
 # =============================================================================
 

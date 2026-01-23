@@ -58,3 +58,6 @@ api_key.txt
 
 # Claude Code settings (may contain sensitive data)
 .claude/
+
+# Nested repos
+skillforge-hub/
