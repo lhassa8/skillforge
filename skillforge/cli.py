@@ -4922,6 +4922,83 @@ def hub_install(
         raise typer.Exit(code=1)
 
 
+@hub_app.command("publish")
+def hub_publish(
+    skill_path: Path = typer.Argument(..., help="Path to the skill directory to publish"),
+    message: Optional[str] = typer.Option(
+        None,
+        "--message",
+        "-m",
+        help="Additional message for the pull request",
+    ),
+) -> None:
+    """Publish a skill to the SkillForge Hub.
+
+    This will validate your skill, fork the hub repository (if needed),
+    and create a pull request to add your skill.
+
+    Requires the GitHub CLI (gh) to be installed and authenticated.
+    Install from: https://cli.github.com
+
+    Example:
+
+    \b
+        skillforge hub publish ./skills/my-skill
+        skillforge hub publish ./skills/my-skill -m "My awesome skill for X"
+    """
+    from skillforge.hub import publish_skill, check_gh_cli
+
+    # Check gh CLI first
+    if not check_gh_cli():
+        console.print("[red]Error:[/red] GitHub CLI (gh) not installed or not authenticated")
+        console.print()
+        console.print("[bold]To fix this:[/bold]")
+        console.print("  1. Install gh: [cyan]https://cli.github.com[/cyan]")
+        console.print("  2. Authenticate: [cyan]gh auth login[/cyan]")
+        raise typer.Exit(code=1)
+
+    skill_path = Path(skill_path)
+    if not skill_path.exists():
+        console.print(f"[red]Error:[/red] Skill path not found: {skill_path}")
+        raise typer.Exit(code=1)
+
+    # Validate first
+    from skillforge.validator import validate_skill_directory
+
+    console.print("[dim]Validating skill...[/dim]")
+    result = validate_skill_directory(skill_path)
+
+    if not result.valid:
+        console.print("[red]Skill validation failed:[/red]")
+        for error in result.errors:
+            console.print(f"  [red]✗[/red] {error}")
+        raise typer.Exit(code=1)
+
+    skill = result.skill
+    console.print(f"[green]✓[/green] Valid skill: [cyan]{skill.name}[/cyan] v{skill.version}")
+    console.print()
+
+    # Publish
+    console.print("[dim]Publishing to SkillForge Hub...[/dim]")
+    console.print("[dim]  - Forking repository (if needed)[/dim]")
+    console.print("[dim]  - Creating branch[/dim]")
+    console.print("[dim]  - Uploading skill[/dim]")
+    console.print("[dim]  - Creating pull request[/dim]")
+    console.print()
+
+    pub_result = publish_skill(skill_path, message=message)
+
+    if pub_result.success:
+        console.print("[green]✓ Pull request created![/green]")
+        console.print()
+        console.print(f"[bold]PR URL:[/bold] [cyan]{pub_result.pr_url}[/cyan]")
+        console.print()
+        console.print("[dim]Your skill will be available after the PR is reviewed and merged.[/dim]")
+    else:
+        console.print(f"[red]Error:[/red] {pub_result.error}")
+        raise typer.Exit(code=1)
+
+
 # =============================================================================
 # Info Command
 # =============================================================================

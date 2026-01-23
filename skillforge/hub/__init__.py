@@ -11,6 +11,11 @@ from skillforge.hub.client import (
     HUB_INDEX_URL,
     HUB_RAW_URL,
 )
+from skillforge.hub.publish import (
+    PublishResult,
+    publish_skill,
+    check_gh_cli,
+)
 
 __all__ = [
     "HubClient",
@@ -22,4 +27,7 @@ __all__ = [
     "HUB_REPO",
     "HUB_INDEX_URL",
     "HUB_RAW_URL",
+    "PublishResult",
+    "publish_skill",
+    "check_gh_cli",
 ]
