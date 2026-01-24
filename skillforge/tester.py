@@ -613,8 +613,8 @@ def _check_mock_trigger(skill: Skill, user_input: str) -> bool:
                 matches += 1
                 break
 
-    # Trigger if at least 1 keyword matches or input mentions skill name
-    return matches >= 1 or skill.name.lower().replace("-", " ") in input_lower
+    # Trigger if at least 2 keywords match or input mentions skill name
+    return matches >= 2 or skill.name.lower().replace("-", " ") in input_lower
 
 
 def run_test_mock(skill: Skill, test_case: TestCase) -> TestResult:
