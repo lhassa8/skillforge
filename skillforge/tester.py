@@ -580,9 +580,11 @@ def evaluate_assertion(assertion: Assertion, response: str) -> AssertionResult:
 def _check_mock_trigger(skill: Skill, user_input: str) -> bool:
     """Check if skill would be triggered in mock mode.
 
-    Uses simple keyword matching based on skill description and name.
+    Uses keyword matching based on skill description and name.
+    Supports partial/stem matching for better detection.
     """
     input_lower = user_input.lower()
+    input_words = set(re.findall(r"\b[a-zA-Z]{3,}\b", input_lower))
 
     # Extract keywords from skill name and description
     keywords: set[str] = set()
@@ -596,11 +598,23 @@ def _check_mock_trigger(skill: Skill, user_input: str) -> bool:
     desc_words = re.findall(r"\b[a-zA-Z]{4,}\b", skill.description.lower())
     keywords.update(desc_words[:10])
 
-    # Check if any keywords appear in input
-    matches = sum(1 for kw in keywords if kw in input_lower)
+    # Check for matches using prefix/stem matching
+    matches = 0
+    for kw in keywords:
+        # Exact match
+        if kw in input_lower:
+            matches += 1
+            continue
+        # Stem/prefix match: check if keyword shares a common root with input words
+        kw_stem = kw[:4] if len(kw) >= 4 else kw
+        for iw in input_words:
+            iw_stem = iw[:4] if len(iw) >= 4 else iw
+            if kw_stem == iw_stem:
+                matches += 1
+                break
 
-    # Trigger if at least 2 keywords match or input mentions skill name
-    return matches >= 2 or skill.name.lower().replace("-", " ") in input_lower
+    # Trigger if at least 1 keyword matches or input mentions skill name
+    return matches >= 1 or skill.name.lower().replace("-", " ") in input_lower
 
 
 def run_test_mock(skill: Skill, test_case: TestCase) -> TestResult:

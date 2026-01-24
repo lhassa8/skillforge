@@ -82,21 +82,43 @@ class HubClient:
         return [HubSkill.from_dict(s) for s in index.get("skills", [])]
 
     def search(self, query: str) -> list[HubSkill]:
-        """Search for skills by name, description, or tags."""
+        """Search for skills by name, description, or tags.
+
+        Supports multi-word queries by matching individual words.
+        Results are ranked by number of matching words.
+        """
+        import re
+
         query_lower = query.lower()
+        # Split query into individual words (at least 2 chars)
+        query_words = [w for w in re.findall(r"\b[a-zA-Z]{2,}\b", query_lower)]
         skills = self.list_skills()
 
-        results = []
+        results: list[tuple[int, HubSkill]] = []
         for skill in skills:
-            # Search in name, description, and tags
-            if (
-                query_lower in skill.name.lower()
-                or query_lower in skill.description.lower()
-                or any(query_lower in tag.lower() for tag in skill.tags)
-            ):
-                results.append(skill)
+            # Build searchable text from skill fields
+            skill_text = f"{skill.name} {skill.description} {' '.join(skill.tags)}".lower()
+            skill_name_parts = skill.name.replace("-", " ").replace("_", " ").lower()
 
-        return results
+            # Score by number of matching words
+            score = 0
+            for word in query_words:
+                if word in skill_text:
+                    score += 1
+                # Also match word stems in skill name (e.g., "review" matches "reviewer")
+                elif any(word[:4] == part[:4] for part in skill_name_parts.split() if len(part) >= 4):
+                    score += 1
+
+            # Also check if full query matches (for exact phrase search)
+            if query_lower in skill_text or query_lower in skill_name_parts:
+                score += len(query_words)  # Boost for exact match
+
+            if score > 0:
+                results.append((score, skill))
+
+        # Sort by score (descending) then by name
+        results.sort(key=lambda x: (-x[0], x[1].name))
+        return [skill for _, skill in results]
 
     def get_skill(self, name: str) -> Optional[HubSkill]:
         """Get a specific skill by name."""
