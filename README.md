@@ -1468,6 +1468,68 @@ mypy skillforge/
 
 ---
 
+## SkillForge Hub
+
+The [SkillForge Hub](https://lhassa8.github.io/skillforge-hub/) is a community repository of pre-built skills. Browse, install, and share skills with the community.
+
+### Browse Skills
+
+```bash
+# List all available skills (48+ and growing)
+skillforge hub list
+
+# Search for skills
+skillforge hub search "code review"
+skillforge hub search react
+skillforge hub search docker
+
+# Get skill details
+skillforge hub info code-reviewer
+```
+
+### Install Skills
+
+```bash
+# Install to user directory (~/.claude/skills/) - available everywhere
+skillforge hub install code-reviewer
+
+# Install to project directory (./.claude/skills/) - project-specific
+skillforge hub install code-reviewer --project
+```
+
+### Publish Your Skills
+
+Share your skills with the community:
+
+```bash
+# Publish to the hub (requires GitHub CLI)
+skillforge hub publish ./skills/my-awesome-skill
+
+# Add a message to your pull request
+skillforge hub publish ./skills/my-skill -m "My first contribution!"
+```
+
+**Requirements:**
+- GitHub CLI (`gh`) installed and authenticated
+- Skill passes validation (`skillforge validate`)
+
+### Popular Skills
+
+| Skill | Description |
+|-------|-------------|
+| `code-reviewer` | Review code for bugs, security, and style |
+| `git-commit` | Write conventional commit messages |
+| `test-writer` | Generate unit tests |
+| `api-documenter` | Create API documentation |
+| `docker-helper` | Write Dockerfiles and compose configs |
+| `sql-helper` | Write and optimize SQL queries |
+| `react-helper` | Build React components and hooks |
+| `debugger` | Systematic debugging assistance |
+
+[Browse all skills →](https://lhassa8.github.io/skillforge-hub/)
+
+---
+
 ## Contributing
 
 Contributions are welcome! Please:
@@ -1512,6 +1574,7 @@ Get started quickly with our examples and step-by-step tutorials:
 - [Model Context Protocol (MCP)](https://modelcontextprotocol.io/)
 
 **Community:**
+- [SkillForge Hub](https://lhassa8.github.io/skillforge-hub/) - Browse and install community skills
 - [GitHub Discussions](https://github.com/lhassa8/skillforge/discussions)
 - [Issue Tracker](https://github.com/lhassa8/skillforge/issues)
 - [Security Policy](SECURITY.md)
