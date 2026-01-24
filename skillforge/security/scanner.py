@@ -16,7 +16,6 @@ from skillforge.skill import Skill, SkillParseError
 from skillforge.security.patterns import (
     SECURITY_PATTERNS,
     SecurityFinding,
-    SecurityIssueType,
     SecurityPattern,
     Severity,
 )
@@ -72,14 +71,10 @@ class ScanResult:
 
         total_score = 0
         has_critical = False
-        has_high = False
-
         for finding in self.findings:
             total_score += weights.get(finding.severity, 0)
             if finding.severity == Severity.CRITICAL:
                 has_critical = True
-            elif finding.severity == Severity.HIGH:
-                has_high = True
 
         # Cap at 100
         self.risk_score = min(100, total_score)

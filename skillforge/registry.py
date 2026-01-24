@@ -16,7 +16,6 @@ from typing import Optional
 
 from skillforge.versioning import (
     SkillVersion,
-    VersionConstraint,
     VersionParseError,
     parse_constraint,
     parse_version,
@@ -565,21 +564,16 @@ def pull_skill(
     if not skill:
         raise SkillNotFoundError(f"Skill '{skill_name}' not found in any registry")
 
-    # Resolve version if specified
-    resolved_version: Optional[str] = None
+    # Validate version if specified
     if version:
         # Try as exact version first
         try:
             exact_ver = parse_version(version)
             available = skill.get_available_versions()
-            if exact_ver in available:
-                resolved_version = str(exact_ver)
-            else:
+            if exact_ver not in available:
                 # Maybe it's a constraint
                 matched = skill.find_matching_version(version)
-                if matched:
-                    resolved_version = str(matched)
-                else:
+                if not matched:
                     raise RegistryError(
                         f"No version matching '{version}' found for '{skill_name}'. "
                         f"Available: {', '.join(str(v) for v in available) or skill.version}"
@@ -587,9 +581,7 @@ def pull_skill(
         except VersionParseError:
             # Try as constraint
             matched = skill.find_matching_version(version)
-            if matched:
-                resolved_version = str(matched)
-            else:
+            if not matched:
                 raise RegistryError(
                     f"Invalid version or no matching version: '{version}'"
                 )
@@ -644,7 +636,7 @@ def pull_skill(
                         )
                     else:
                         raise RegistryError(
-                            f"Could not find SKILL.md in cloned repository"
+                            "Could not find SKILL.md in cloned repository"
                         )
 
             return skill_dir

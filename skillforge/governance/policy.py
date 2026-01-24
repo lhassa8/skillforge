@@ -6,7 +6,6 @@ which skills can be used in different environments.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -15,7 +14,7 @@ from typing import Optional
 import yaml
 
 from skillforge.governance.trust import TrustTier, get_trust_metadata
-from skillforge.security import Severity
+from skillforge.security import ScanResult, Severity
 
 
 class PolicyError(Exception):

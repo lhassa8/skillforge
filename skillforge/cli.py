@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
@@ -626,7 +625,7 @@ def compose(
         skillforge compose ./skills/my-composite --output ./skills/composed
         skillforge compose ./skills/my-skill --preview
     """
-    from skillforge.composer import compose_skill, CompositionError, has_includes
+    from skillforge.composer import compose_skill, has_includes
 
     skill_path = Path(skill_path)
 
@@ -636,7 +635,7 @@ def compose(
 
     # Check if skill has includes
     if not has_includes(skill_path):
-        console.print(f"[yellow]Note:[/yellow] Skill has no includes")
+        console.print("[yellow]Note:[/yellow] Skill has no includes")
         console.print("[dim]Nothing to compose - skill is already standalone[/dim]")
         raise typer.Exit(code=0)
 
@@ -1197,9 +1196,7 @@ def test(
         run_regression_tests,
         load_baselines,
         has_baselines,
-        RegressionBaselineFile,
         TestDefinitionError,
-        SkillTestError,
     )
     from skillforge.ai import get_default_provider
 
@@ -1992,7 +1989,7 @@ def registry_add(
     """
     from skillforge.registry import add_registry, RegistryError
 
-    console.print(f"[dim]Fetching registry index...[/dim]")
+    console.print("[dim]Fetching registry index...[/dim]")
 
     try:
         registry = add_registry(url, name)
@@ -2042,7 +2039,7 @@ def registry_list_cmd() -> None:
 
     console.print(table)
     console.print()
-    console.print(f"[dim]Update indexes: skillforge registry update[/dim]")
+    console.print("[dim]Update indexes: skillforge registry update[/dim]")
 
 
 @registry_app.command("remove")
@@ -2291,7 +2288,7 @@ def version_show(
     if skill.version:
         console.print(f"[bold]Version:[/bold] {skill.version}")
     else:
-        console.print(f"[bold]Version:[/bold] [dim]not specified[/dim]")
+        console.print("[bold]Version:[/bold] [dim]not specified[/dim]")
         console.print()
         console.print("[dim]Add a version with: skillforge version bump ./skills/my-skill --set 1.0.0[/dim]")
 
@@ -2838,7 +2835,7 @@ def mcp_discover(
         console.print("[yellow]No MCP servers configured[/yellow]")
         return
 
-    console.print(f"[bold]Configured servers:[/bold]")
+    console.print("[bold]Configured servers:[/bold]")
     for server in servers:
         console.print(f"  • {server.name}")
     console.print()
@@ -2853,7 +2850,7 @@ def mcp_discover(
             return
 
         console.print()
-        console.print(f"[bold]Discovered tools:[/bold]")
+        console.print("[bold]Discovered tools:[/bold]")
         console.print()
 
         table = Table(show_header=True, header_style="bold")
@@ -3738,7 +3735,7 @@ def governance_approve(
     )
 
     console.print()
-    console.print(f"[green]✓ Skill approved[/green]")
+    console.print("[green]✓ Skill approved[/green]")
     console.print(f"  Approval ID: {approval_id}")
     console.print(f"  Trust Tier: {trust_tier.name.lower()}")
     console.print(f"  Approved by: {metadata.verified_by}")
@@ -3805,7 +3802,6 @@ def publish(
         skillforge publish ./skills/my-skill --dry-run
     """
     from skillforge.platforms import (
-        Platform,
         get_platform,
         publish_skill,
         publish_to_all,
@@ -3820,7 +3816,7 @@ def publish(
 
     if all_platforms:
         # Publish to all platforms
-        console.print(f"[dim]Publishing to all platforms...[/dim]")
+        console.print("[dim]Publishing to all platforms...[/dim]")
         console.print()
 
         results = publish_to_all(skill_path, output_dir, dry_run)
@@ -3856,7 +3852,7 @@ def publish(
 
         console.print()
         if dry_run:
-            console.print(f"[yellow]Dry run completed[/yellow]")
+            console.print("[yellow]Dry run completed[/yellow]")
         else:
             console.print(f"[green]✓ Published to {platform}[/green]")
 
@@ -4078,7 +4074,6 @@ def analytics_report(
         skillforge analytics report --format json --out report.json
     """
     from skillforge.analytics import generate_usage_report
-    import json
 
     report = generate_usage_report(period_days=period)
 
@@ -4383,7 +4378,6 @@ def migrate_run(
         migrate_skill,
         migrate_directory,
         get_migration_preview,
-        SkillFormat,
     )
 
     path = Path(path).resolve()
@@ -4435,7 +4429,7 @@ def migrate_run(
         )
 
         console.print()
-        console.print(f"[bold]Migration Complete[/bold]")
+        console.print("[bold]Migration Complete[/bold]")
         console.print(f"Total: {result.total}")
         console.print(f"[green]Successful: {result.successful}[/green]")
         console.print(f"[yellow]Skipped: {result.skipped}[/yellow]")
@@ -4584,9 +4578,6 @@ def config_set(
         skillforge config set default_model gpt-4o --scope project
     """
     from skillforge.config import (
-        get_config,
-        save_user_config,
-        save_project_config,
         load_config_file,
         get_user_config_path,
         get_project_config_path,

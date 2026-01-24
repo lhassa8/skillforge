@@ -15,7 +15,6 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
-import yaml
 
 
 class AuditEventType(Enum):

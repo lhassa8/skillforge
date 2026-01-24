@@ -37,7 +37,6 @@ Version: 1.0.0
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING
 
 # =============================================================================
 # Version Information

@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from skillforge.skill import Skill
 from skillforge.platforms.base import (
@@ -18,7 +17,6 @@ from skillforge.platforms.base import (
     PlatformCredentials,
     PublishError,
     PublishResult,
-    TransformError,
     TransformResult,
     register_adapter,
 )
@@ -167,7 +165,6 @@ class LangChainAdapter(PlatformAdapter):
 
     def _to_python_module(self, skill: Skill, variables: list[str]) -> str:
         """Generate Python module code for LangChain usage."""
-        module_name = skill.name.replace("-", "_")
         class_name = "".join(word.title() for word in skill.name.split("-"))
 
         # Escape content for Python string

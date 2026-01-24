@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,7 +10,7 @@ from typing import Optional
 
 import yaml
 
-from skillforge.versioning import SkillVersion, VersionError
+from skillforge.versioning import SkillVersion
 
 
 class LockFileError(Exception):
@@ -389,7 +388,6 @@ def verify_against_lock(
     Returns:
         Verification result with details
     """
-    from skillforge.skill import Skill, SkillParseError
 
     result = LockVerificationResult(verified=True)
 
