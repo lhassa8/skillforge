@@ -57,8 +57,8 @@ from skillforge.skill import (
 )
 
 from skillforge.validator import (
+    ValidationMessage as SkillValidationIssue,
     ValidationResult,
-    ValidationError as SkillValidationIssue,
     validate_skill,
     validate_skill_directory,
 )

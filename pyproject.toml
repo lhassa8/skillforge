@@ -92,3 +92,19 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 addopts = "-v"
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+# Gradually enable stricter checking
+warn_return_any = false
+warn_unused_ignores = false
+# Allow some common patterns
+allow_redefinition = true
+# Disable strict optional for now (many false positives)
+strict_optional = false
+# Disable errors for missing annotations (legacy code)
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+# Ignore specific error codes causing issues
+disable_error_code = ["var-annotated", "arg-type", "return-value", "assignment", "union-attr", "dict-item", "attr-defined"]

@@ -130,7 +130,7 @@ def publish_skill(
     if not result.valid:
         return PublishResult(
             success=False,
-            error=f"Skill validation failed: {', '.join(result.errors)}",
+            error=f"Skill validation failed: {', '.join(str(e) for e in result.errors)}",
         )
 
     skill = result.skill
